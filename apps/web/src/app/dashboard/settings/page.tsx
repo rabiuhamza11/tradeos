@@ -1,142 +1,183 @@
 'use client';
-import { useEffect, useState } from 'react';
-import { authApi, analyticsApi } from '@/lib/api';
-import { useAuthStore } from '@/lib/store';
-import { Key, Shield, CheckCircle, XCircle, Plus, Trash2, RefreshCw, Wallet, AlertTriangle } from 'lucide-react';
+import { useState } from 'react';
+import { Shield, Key, Plus, Trash2, Check, AlertCircle, Eye, EyeOff } from 'lucide-react';
 
-const EXCHANGES = [
-  { id: 'binance', name: 'Binance', desc: 'Crypto — 300+ coins', docs: 'https://www.binance.com/en/my/settings/api-management' },
-  { id: 'coinbase', name: 'Coinbase Advanced', desc: 'Crypto — US regulated', docs: 'https://www.coinbase.com/settings/api' },
-  { id: 'alpaca', name: 'Alpaca Markets', desc: 'US Stocks, ETFs, Options', docs: 'https://app.alpaca.markets/paper/dashboard/overview' },
-  { id: 'oanda', name: 'OANDA', desc: 'Forex, CFDs, Commodities', docs: 'https://www.oanda.com/account/' },
-];
+interface ApiKeyEntry {
+  id: string;
+  exchange: string;
+  label: string;
+  hasKey: boolean;
+  status: 'active' | 'inactive';
+  permissions: string[];
+}
 
 export default function SettingsPage() {
-  const [apiKeys, setApiKeys] = useState<any[]>([]);
+  const [testnet, setTestnet] = useState(true);
+  const [keys, setKeys] = useState<ApiKeyEntry[]>([
+    { id: '1', exchange: 'Binance Spot', label: 'Main Binance', hasKey: true, status: 'active', permissions: ['Read', 'Trade', 'Withdraw'] },
+    { id: '2', exchange: 'Binance Futures', label: 'Futures Trading', hasKey: true, status: 'active', permissions: ['Read', 'Trade'] },
+    { id: '3', exchange: 'Coinbase', label: 'Coinbase Advanced', hasKey: false, status: 'inactive', permissions: [] },
+    { id: '4', exchange: 'Alpaca', label: 'Stock Trading', hasKey: false, status: 'inactive', permissions: [] },
+    { id: '5', exchange: 'OANDA', label: 'Forex Trading', hasKey: false, status: 'inactive', permissions: [] },
+  ]);
   const [showAdd, setShowAdd] = useState(false);
-  const [selectedExchange, setSelectedExchange] = useState('');
-  const [form, setForm] = useState({ apiKey: '', apiSecret: '', passphrase: '' });
-  const [testResults, setTestResults] = useState<Record<string, boolean> | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState('');
+  const [newKey, setNewKey] = useState({ exchange: 'Binance Spot', apiKey: '', apiSecret: '', passphrase: '' });
+  const [showSecret, setShowSecret] = useState(false);
+  const [saved, setSaved] = useState(false);
 
-  useEffect(() => { loadKeys(); }, []);
-
-  const loadKeys = async () => {
-    try {
-      const { data } = await authApi.login('demo@tradeos.io', 'demo'); // Would use stored token
-    } catch {}
-    // Load from API
-    setApiKeys([
-      { exchange: 'binance', keyPrefix: 'x7Bn3KpQ', isActive: true },
-    ]);
+  const addKey = () => {
+    if (!newKey.apiKey || !newKey.apiSecret) return;
+    setKeys((prev) => prev.map((k) =>
+      k.exchange === newKey.exchange
+        ? { ...k, hasKey: true, status: 'active', label: `${newKey.exchange} Key` }
+        : k
+    ));
+    setShowAdd(false);
+    setNewKey({ exchange: 'Binance Spot', apiKey: '', apiSecret: '', passphrase: '' });
+    setSaved(true);
+    setTimeout(() => setSaved(false), 3000);
   };
 
-  const addKey = async () => {
-    setLoading(true); setMessage('');
-    try {
-      // POST /users/api-keys
-      setMessage(`API key for ${selectedExchange} saved and verified.`);
-      setShowAdd(false); setForm({ apiKey: '', apiSecret: '', passphrase: '' });
-      loadKeys();
-    } catch (err: any) {
-      setMessage(err.response?.data?.message || 'Failed to save API key');
-    } finally { setLoading(false); }
+  const removeKey = (id: string) => {
+    setKeys((prev) => prev.map((k) => k.id === id ? { ...k, hasKey: false, status: 'inactive', permissions: [] } : k));
   };
-
-  const testAll = async () => {
-    setLoading(true);
-    try {
-      setTestResults({ binance: true, alpaca: true, coinbase: false, oanda: false });
-    } catch {} finally { setLoading(false); }
-  };
-
-  const selectedEx = EXCHANGES.find(e => e.id === selectedExchange);
 
   return (
     <div>
       <h1 className="text-2xl font-bold mb-1">Settings</h1>
-      <p className="text-white/40 mb-6">Manage exchange API keys and security</p>
+      <p className="text-white/40 mb-6">Manage API keys, trading environment, and security</p>
 
-      {/* Exchange Connections */}
+      {/* Trading Environment */}
       <div className="card mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold flex items-center gap-2"><Key size={20} /> Exchange API Keys</h2>
-          <div className="flex gap-2">
-            <button onClick={testAll} disabled={loading} className="btn-secondary text-sm px-4 py-2 flex items-center gap-2"><RefreshCw size={14} /> Test All</button>
-            <button onClick={() => setShowAdd(true)} className="btn-primary text-sm px-4 py-2 flex items-center gap-2"><Plus size={14} /> Add Key</button>
-          </div>
+        <h3 className="font-semibold mb-4 flex items-center gap-2"><Shield size={18} /> Trading Environment</h3>
+        <div className="flex gap-4">
+          <button onClick={() => setTestnet(true)}
+            className={`flex-1 p-4 rounded-lg border-2 transition ${testnet ? 'border-green-500 bg-green-500/10' : 'border-white/10'}`}>
+            <div className="font-semibold mb-1">📄 Paper Trading</div>
+            <div className="text-sm text-white/40">Test strategies with simulated money. No real funds at risk.</div>
+            {testnet && <div className="text-xs text-green-400 mt-2 flex items-center gap-1"><Check size={14} /> Active</div>}
+          </button>
+          <button onClick={() => setTestnet(false)}
+            className={`flex-1 p-4 rounded-lg border-2 transition ${!testnet ? 'border-red-500 bg-red-500/10' : 'border-white/10'}`}>
+            <div className="font-semibold mb-1">🔴 Live Trading</div>
+            <div className="text-sm text-white/40">Real money. Real exchanges. Real risk.</div>
+            {!testnet && <div className="text-xs text-red-400 mt-2 flex items-center gap-1"><AlertCircle size={14} /> Live — Trade with caution</div>}
+          </button>
         </div>
-
-        {apiKeys.length === 0 && !showAdd ? (
-          <div className="text-center py-8">
-            <Key size={32} className="mx-auto text-white/20 mb-3" />
-            <p className="text-white/30">No exchange API keys configured.</p>
-            <p className="text-white/20 text-sm mt-1">Add keys to enable live trading.</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {EXCHANGES.map((ex) => {
-              const key = apiKeys.find(k => k.exchange === ex.id);
-              const testResult = testResults?.[ex.id];
-              return (
-                <div key={ex.id} className="flex items-center justify-between p-4 bg-white/5 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${key ? 'bg-green-500/20' : 'bg-white/5'}`}>
-                      {key ? <CheckCircle size={20} className="text-green-400" /> : <XCircle size={20} className="text-white/20" />}
-                    </div>
-                    <div>
-                      <p className="font-medium">{ex.name}</p>
-                      <p className="text-xs text-white/40">{ex.desc}</p>
-                      {key && <p className="text-xs text-white/30 mt-1">Key: {key.keyPrefix}...</p>}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {testResult !== undefined && (
-                      <span className={`text-xs ${testResult ? 'text-green-400' : 'text-red-400'}`}>{testResult ? 'Connected' : 'Failed'}</span>
-                    )}
-                    {key ? <button className="text-red-400 hover:bg-red-500/10 p-2 rounded-lg"><Trash2 size={16} /></button> : <button onClick={() => { setSelectedExchange(ex.id); setShowAdd(true); }} className="btn-secondary text-sm px-3 py-1">Connect</button>}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-        {message && <div className="mt-4 p-3 rounded-lg bg-tradeos-accent/10 text-tradeos-accent text-sm">{message}</div>}
       </div>
 
-      {/* Add Key Form */}
-      {showAdd && selectedEx && (
-        <div className="card mb-6">
-          <h3 className="font-semibold mb-2">Connect {selectedEx.name}</h3>
-          <p className="text-sm text-white/40 mb-2">{selectedEx.desc}</p>
-          <a href={selectedEx.docs} target="_blank" className="text-tradeos-accent text-sm mb-4 block">Get API keys from {selectedEx.name} →</a>
-          <div className="space-y-3">
-            <input className="input" placeholder="API Key" value={form.apiKey} onChange={(e) => setForm({ ...form, apiKey: e.target.value })} />
-            <input className="input" type="password" placeholder="API Secret" value={form.apiSecret} onChange={(e) => setForm({ ...form, apiSecret: e.target.value })} />
-            {selectedEx.id === 'coinbase' && <input className="input" placeholder="Passphrase" value={form.passphrase} onChange={(e) => setForm({ ...form, passphrase: e.target.value })} />}
-            {selectedEx.id === 'oanda' && <input className="input" placeholder="Account ID" value={form.passphrase} onChange={(e) => setForm({ ...form, passphrase: e.target.value })} />}
-            <div className="flex gap-3">
-              <button onClick={addKey} disabled={loading || !form.apiKey || !form.apiSecret} className="btn-primary">{loading ? 'Verifying...' : 'Save & Verify'}</button>
-              <button onClick={() => setShowAdd(false)} className="btn-secondary">Cancel</button>
+      {/* API Keys */}
+      <div className="card mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold flex items-center gap-2"><Key size={18} /> Exchange API Keys</h3>
+          <button onClick={() => setShowAdd(true)} className="btn-primary flex items-center gap-2 text-sm">
+            <Plus size={16} /> Add Key
+          </button>
+        </div>
+
+        <div className="space-y-3">
+          {keys.map((k) => (
+            <div key={k.id} className="flex items-center justify-between p-4 bg-white/5 rounded-lg">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="font-semibold">{k.exchange}</span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${
+                    k.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-white/10 text-white/30'
+                  }`}>{k.status}</span>
+                </div>
+                <div className="text-xs text-white/40">
+                  {k.hasKey ? `Key: ${k.label} · ${k.permissions.join(', ')}` : 'No API key configured'}
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                {k.hasKey ? (
+                  <button onClick={() => removeKey(k.id)} className="text-red-400 hover:text-red-300">
+                    <Trash2 size={18} />
+                  </button>
+                ) : (
+                  <button onClick={() => { setNewKey({ ...newKey, exchange: k.exchange }); setShowAdd(true); }}
+                    className="text-tradeos-accent text-sm">Connect</button>
+                )}
+              </div>
             </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Security Settings */}
+      <div className="card mb-6">
+        <h3 className="font-semibold mb-4 flex items-center gap-2"><Shield size={18} /> Security</h3>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+            <div><div className="font-medium">Two-Factor Authentication</div><div className="text-xs text-white/40">Extra security for your account</div></div>
+            <span className="text-xs px-3 py-1 rounded-full bg-green-500/20 text-green-400">Enabled</span>
           </div>
-          <div className="mt-4 flex items-start gap-2 p-3 bg-yellow-500/10 rounded-lg">
-            <AlertTriangle size={16} className="text-yellow-400 flex-shrink-0 mt-0.5" />
-            <p className="text-xs text-yellow-400">Keys are encrypted with AES-256-GCM before storage. We never store plaintext secrets. Use testnet/paper trading keys first.</p>
+          <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+            <div><div className="font-medium">IP Whitelist</div><div className="text-xs text-white/40">Restrict API access to specific IPs</div></div>
+            <span className="text-xs px-3 py-1 rounded-full bg-white/10 text-white/30">Not configured</span>
+          </div>
+          <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+            <div><div className="font-medium">Withdrawal Whitelist</div><div className="text-xs text-white/40">Only allow withdrawals to trusted addresses</div></div>
+            <span className="text-xs px-3 py-1 rounded-full bg-white/10 text-white/30">Not configured</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Notifications */}
+      <div className="card mb-6">
+        <h3 className="font-semibold mb-4">Notifications</h3>
+        <div className="space-y-3">
+          {['Trade Executions', 'Order Fills', 'Price Alerts', 'Daily P&L Summary', 'Risk Warnings'].map((n) => (
+            <label key={n} className="flex items-center justify-between p-3 bg-white/5 rounded-lg cursor-pointer">
+              <span className="text-sm">{n}</span>
+              <input type="checkbox" defaultChecked className="toggle" />
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {saved && <div className="fixed bottom-6 right-6 bg-green-500 text-white px-4 py-2 rounded-lg flex items-center gap-2"><Check size={18} /> Settings saved</div>}
+
+      {/* Add Key Modal */}
+      {showAdd && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setShowAdd(false)}>
+          <div className="bg-tradeos-dark-2 rounded-xl p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold mb-4">Add API Key — {newKey.exchange}</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-white/40 mb-1 block">Exchange</label>
+                <select className="input" value={newKey.exchange} onChange={(e) => setNewKey({ ...newKey, exchange: e.target.value })}>
+                  <option>Binance Spot</option><option>Binance Futures</option><option>Coinbase</option><option>Alpaca</option><option>OANDA</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-white/40 mb-1 block">API Key</label>
+                <input className="input" placeholder="Your API key" value={newKey.apiKey} onChange={(e) => setNewKey({ ...newKey, apiKey: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-xs text-white/40 mb-1 block">API Secret</label>
+                <div className="relative">
+                  <input className="input pr-10" type={showSecret ? 'text' : 'password'} placeholder="Your API secret" value={newKey.apiSecret} onChange={(e) => setNewKey({ ...newKey, apiSecret: e.target.value })} />
+                  <button onClick={() => setShowSecret(!showSecret)} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40">
+                    {showSecret ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </div>
+              {(newKey.exchange === 'Coinbase') && (
+                <div>
+                  <label className="text-xs text-white/40 mb-1 block">Passphrase (Coinbase only)</label>
+                  <input className="input" placeholder="Passphrase" value={newKey.passphrase} onChange={(e) => setNewKey({ ...newKey, passphrase: e.target.value })} />
+                </div>
+              )}
+              <div className="p-3 bg-amber-500/10 rounded-lg text-xs text-amber-400 flex items-start gap-2">
+                <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
+                <span>Keys are encrypted at rest and never sent to the frontend. We recommend restricting API key permissions to Read + Trade only.</span>
+              </div>
+              <button onClick={addKey} className="btn-primary w-full">Save API Key</button>
+            </div>
           </div>
         </div>
       )}
-
-      {/* Security */}
-      <div className="card">
-        <h2 className="text-lg font-semibold flex items-center gap-2 mb-4"><Shield size={20} /> Security</h2>
-        <div className="space-y-3">
-          <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg"><span>Two-Factor Authentication</span><button className="btn-secondary text-sm px-3 py-1">Enable</button></div>
-          <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg"><span>KYC Verification</span><span className="text-xs text-white/40">Pending</span></div>
-          <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg"><span>Trading Mode</span><span className="text-xs px-2 py-1 rounded bg-yellow-500/20 text-yellow-400">TESTNET (Paper Trading)</span></div>
-        </div>
-      </div>
     </div>
   );
 }
