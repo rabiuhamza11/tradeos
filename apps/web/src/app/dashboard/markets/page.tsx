@@ -1,105 +1,155 @@
 'use client';
-import { useEffect, useState, useRef } from 'react';
-import { marketApi } from '@/lib/api';
-import { TrendingUp, TrendingDown, Activity } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Search, TrendingUp, TrendingDown, Star } from 'lucide-react';
+
+const EXCHANGES = ['All', 'Binance', 'Coinbase', 'Alpaca', 'OANDA'];
+
+const ALL_SYMBOLS = [
+  { symbol: 'BTC', name: 'Bitcoin', price: 65432, change: 3.6, volume: '28.4B', exchange: 'Binance', sparkline: [63200, 63800, 64100, 64500, 65200, 65432] },
+  { symbol: 'ETH', name: 'Ethereum', price: 3521, change: 2.1, volume: '14.2B', exchange: 'Binance', sparkline: [3420, 3460, 3480, 3510, 3500, 3521] },
+  { symbol: 'SOL', name: 'Solana', price: 142, change: 8.4, volume: '3.1B', exchange: 'Binance', sparkline: [128, 132, 135, 138, 140, 142] },
+  { symbol: 'BNB', name: 'BNB', price: 598, change: 1.2, volume: '1.8B', exchange: 'Binance', sparkline: [590, 592, 595, 594, 597, 598] },
+  { symbol: 'XRP', name: 'Ripple', price: 0.52, change: -1.8, volume: '2.4B', exchange: 'Binance', sparkline: [0.54, 0.53, 0.53, 0.52, 0.52, 0.52] },
+  { symbol: 'ADA', name: 'Cardano', price: 0.45, change: 3.1, volume: '890M', exchange: 'Binance', sparkline: [0.43, 0.44, 0.44, 0.45, 0.45, 0.45] },
+  { symbol: 'AVAX', name: 'Avalanche', price: 28.5, change: 5.2, volume: '670M', exchange: 'Coinbase', sparkline: [26.8, 27.2, 27.8, 28.1, 28.4, 28.5] },
+  { symbol: 'DOT', name: 'Polkadot', price: 6.2, change: -0.8, volume: '420M', exchange: 'Binance', sparkline: [6.3, 6.25, 6.22, 6.2, 6.21, 6.2] },
+  { symbol: 'AAPL', name: 'Apple Inc', price: 214, change: 1.2, volume: '52M', exchange: 'Alpaca', sparkline: [210, 211, 212, 213, 214, 214] },
+  { symbol: 'TSLA', name: 'Tesla', price: 248, change: -2.1, volume: '88M', exchange: 'Alpaca', sparkline: [255, 253, 251, 250, 249, 248] },
+  { symbol: 'NVDA', name: 'NVIDIA', price: 128, change: 4.8, volume: '320M', exchange: 'Alpaca', sparkline: [120, 122, 125, 126, 127, 128] },
+  { symbol: 'EURUSD', name: 'Euro / USD', price: 1.0842, change: 0.3, volume: 'N/A', exchange: 'OANDA', sparkline: [1.082, 1.083, 1.0835, 1.084, 1.0841, 1.0842] },
+  { symbol: 'XAU', name: 'Gold', price: 2387, change: 0.8, volume: 'N/A', exchange: 'OANDA', sparkline: [2370, 2375, 2380, 2383, 2385, 2387] },
+];
+
+function Sparkline({ data, color }: { data: number[]; color: string }) {
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const range = max - min || 1;
+  const points = data.map((v, i) => `${(i / (data.length - 1)) * 80},${20 - ((v - min) / range) * 18}`).join(' ');
+  return (
+    <svg width="80" height="20" viewBox="0 0 80 20">
+      <polyline points={points} fill="none" stroke={color} strokeWidth="1.5" />
+    </svg>
+  );
+}
 
 export default function MarketsPage() {
-  const [quotes, setQuotes] = useState<any[]>([]);
-  const [livePrices, setLivePrices] = useState<Record<string, any>>({});
+  const [exchange, setExchange] = useState('All');
   const [search, setSearch] = useState('');
-  const [connected, setConnected] = useState(false);
-  const wsRef = useRef<any>(null);
+  const [favorites, setFavorites] = useState<string[]>(['BTC', 'ETH']);
 
-  useEffect(() => {
-    // Load initial quotes from REST API
-    marketApi.quotes().then(({ data }) => setQuotes(data)).catch(() => {
-      setQuotes([
-        { symbol: 'BTC', name: 'Bitcoin', price: 65432.50, changePct: 0.036, type: 'CRYPTO' },
-        { symbol: 'ETH', name: 'Ethereum', price: 3521.80, changePct: -0.004, type: 'CRYPTO' },
-        { symbol: 'AAPL', name: 'Apple Inc.', price: 195.42, changePct: 0.0095, type: 'STOCK' },
-        { symbol: 'TSLA', name: 'Tesla', price: 251.30, changePct: -0.0135, type: 'STOCK' },
-        { symbol: 'EURUSD', name: 'EUR/USD', price: 1.0842, changePct: 0.0019, type: 'FOREX' },
-        { symbol: 'XAU', name: 'Gold', price: 2352.40, changePct: 0.0055, type: 'COMMODITY' },
-      ]);
-    });
+  const filtered = ALL_SYMBOLS.filter((s) => {
+    if (exchange !== 'All' && s.exchange !== exchange) return false;
+    if (search && !s.symbol.toLowerCase().includes(search.toLowerCase()) && !s.name.toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  });
 
-    // Connect to WebSocket for live updates
-    const wsUrl = (process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:4000') + '/stream';
-    try {
-      const ws = new WebSocket(wsUrl);
-      wsRef.current = ws;
-
-      ws.onopen = () => {
-        setConnected(true);
-        // Subscribe to all symbol prices
-        ws.send(JSON.stringify({ event: 'subscribe prices', data: { symbols: ['BTC', 'ETH', 'AAPL', 'TSLA', 'EURUSD', 'XAU'] } }));
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const msg = JSON.parse(event.data);
-          if (msg.event === 'price update' || msg.event === 'prices') {
-            const data = Array.isArray(msg.data) ? msg.data : [msg.data];
-            setLivePrices((prev) => {
-              const updated = { ...prev };
-              for (const d of data) { if (d && d.symbol) updated[d.symbol] = d; }
-              return updated;
-            });
-          }
-        } catch {}
-      };
-
-      ws.onclose = () => setConnected(false);
-      ws.onerror = () => setConnected(false);
-    } catch (e) { console.log('WebSocket connection failed, using REST fallback'); }
-
-    return () => { try { wsRef.current?.close(); } catch {} };
-  }, []);
-
-  const filtered = quotes.filter(q => !search || q.symbol.includes(search.toUpperCase()) || q.name.toLowerCase().includes(search.toLowerCase()));
-
-  const getPrice = (q: any) => livePrices[q.symbol]?.price || q.price;
-  const getChange = (q: any) => livePrices[q.symbol]?.changePct ?? q.changePct;
+  const toggleFav = (symbol: string) => {
+    setFavorites((prev) => prev.includes(symbol) ? prev.filter((s) => s !== symbol) : [...prev, symbol]);
+  };
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold mb-1">Markets</h1>
-          <p className="text-white/40">Live market data</p>
+          <p className="text-white/40">Live prices across 5 exchanges</p>
         </div>
-        <div className={`flex items-center gap-2 text-sm ${connected ? 'text-green-400' : 'text-white/30'}`}>
-          <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500 animate-pulse' : 'bg-white/20'}`} />
-          {connected ? 'Live' : 'Offline'}
+        <div className="text-right">
+          <div className="text-sm text-white/40">Market Cap</div>
+          <div className="text-xl font-bold">$2.34T</div>
         </div>
       </div>
 
-      <input className="input mb-4" placeholder="Search symbols..." value={search} onChange={(e) => setSearch(e.target.value)} />
+      {/* Filters */}
+      <div className="flex items-center gap-4 mb-6">
+        <div className="relative flex-1 max-w-xs">
+          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
+          <input className="input pl-10" placeholder="Search symbols..." value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
+        <div className="flex gap-2">
+          {EXCHANGES.map((ex) => (
+            <button key={ex} onClick={() => setExchange(ex)}
+              className={`px-3 py-2 rounded-lg text-sm transition ${exchange === ex ? 'bg-[#00D9A3] text-black font-medium' : 'bg-white/5 text-white/50 hover:bg-white/10'}`}>
+              {ex}
+            </button>
+          ))}
+        </div>
+      </div>
 
-      <div className="card overflow-x-auto">
+      {/* Symbols Table */}
+      <div className="card overflow-hidden">
         <table className="w-full">
-          <thead><tr className="text-left text-white/40 text-sm border-b border-white/5">
-            <th className="pb-3">Symbol</th><th className="pb-3">Name</th><th className="pb-3">Price</th><th className="pb-3">Change</th><th className="pb-3">Type</th>
-          </tr></thead>
+          <thead>
+            <tr className="border-b border-white/5 text-xs text-white/40">
+              <th className="text-left p-3 font-medium"></th>
+              <th className="text-left p-3 font-medium">Symbol</th>
+              <th className="text-right p-3 font-medium">Price</th>
+              <th className="text-right p-3 font-medium">24h Change</th>
+              <th className="text-right p-3 font-medium hidden md:table-cell">Volume</th>
+              <th className="text-center p-3 font-medium hidden md:table-cell">Last 6h</th>
+              <th className="text-right p-3 font-medium hidden lg:table-cell">Exchange</th>
+            </tr>
+          </thead>
           <tbody>
-            {filtered.map((q) => {
-              const price = getPrice(q); const change = getChange(q);
-              return (
-                <tr key={q.symbol} className="border-b border-white/5 hover:bg-white/5 cursor-pointer">
-                  <td className="py-3 font-mono font-bold">{q.symbol}</td>
-                  <td className="py-3 text-white/60">{q.name}</td>
-                  <td className="py-3 font-mono">${price?.toLocaleString(undefined, { minimumFractionDigits: q.type === 'FOREX' ? 4 : 2 })}</td>
-                  <td className={`py-3 flex items-center gap-1 ${change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {change >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-                    {change >= 0 ? '+' : ''}{(change * 100).toFixed(2)}%
-                  </td>
-                  <td className="py-3"><span className="text-xs px-2 py-1 rounded bg-white/5 text-white/40">{q.type}</span></td>
-                </tr>
-              );
-            })}
+            {filtered.map((s) => (
+              <tr key={s.symbol} className="border-b border-white/5 hover:bg-white/5 transition cursor-pointer">
+                <td className="p-3">
+                  <button onClick={(e) => { e.stopPropagation(); toggleFav(s.symbol); }}>
+                    <Star size={16} className={favorites.includes(s.symbol) ? 'text-yellow-400 fill-yellow-400' : 'text-white/20'} />
+                  </button>
+                </td>
+                <td className="p-3">
+                  <div className="font-bold">{s.symbol}</div>
+                  <div className="text-xs text-white/30">{s.name}</div>
+                </td>
+                <td className="p-3 text-right font-mono font-medium">
+                  ${s.price < 1 ? s.price.toFixed(4) : s.price.toLocaleString()}
+                </td>
+                <td className="p-3 text-right">
+                  <span className={`flex items-center justify-end gap-1 ${s.change >= 0 ? 'text-[#00D9A3]' : 'text-red-400'}`}>
+                    {s.change >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                    {s.change >= 0 ? '+' : ''}{s.change}%
+                  </span>
+                </td>
+                <td className="p-3 text-right text-white/40 text-sm hidden md:table-cell">{s.volume}</td>
+                <td className="p-3 hidden md:table-cell">
+                  <div className="flex justify-center">
+                    <Sparkline data={s.sparkline} color={s.change >= 0 ? '#00D9A3' : '#FF4757'} />
+                  </div>
+                </td>
+                <td className="p-3 text-right hidden lg:table-cell">
+                  <span className="text-xs px-2 py-1 rounded bg-white/5 text-white/40">{s.exchange}</span>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
+
+      {/* Favorites */}
+      {favorites.length > 0 && (
+        <div className="mt-6">
+          <h3 className="font-semibold mb-3 flex items-center gap-2"><Star size={16} className="text-yellow-400" /> Favorites</h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {favorites.map((sym) => {
+              const s = ALL_SYMBOLS.find((x) => x.symbol === sym);
+              if (!s) return null;
+              return (
+                <div key={s.symbol} className="card">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-bold">{s.symbol}</span>
+                    <span className={s.change >= 0 ? 'text-[#00D9A3] text-sm' : 'text-red-400 text-sm'}>
+                      {s.change >= 0 ? '+' : ''}{s.change}%
+                    </span>
+                  </div>
+                  <div className="text-xl font-mono">${s.price.toLocaleString()}</div>
+                  <div className="text-xs text-white/30 mt-1">{s.exchange}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
