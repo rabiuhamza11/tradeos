@@ -1,196 +1,169 @@
 'use client';
-import { useState, useEffect } from 'react';
-import { portfoliosApi } from '@/lib/api';
-import { TrendingUp, TrendingDown, Wallet, PieChart, Plus } from 'lucide-react';
+import { useState } from 'react';
+import { Wallet, Plus, TrendingUp, TrendingDown, PieChart, ArrowRight } from 'lucide-react';
+
+const portfolios = [
+  { id: '1', name: 'Crypto Portfolio', initialCapital: 25000, currentValue: 31250, currency: 'USD', color: '#00D9A3',
+    positions: [
+      { symbol: 'BTC', qty: 0.25, entry: 52000, current: 65432, pnl: 33.1, exchange: 'Binance' },
+      { symbol: 'ETH', qty: 3.5, entry: 2900, current: 3521, pnl: 21.4, exchange: 'Binance' },
+      { symbol: 'SOL', qty: 45, entry: 98, current: 142, pnl: 44.9, exchange: 'Coinbase' },
+    ]
+  },
+  { id: '2', name: 'Stock Portfolio', initialCapital: 50000, currentValue: 54800, currency: 'USD', color: '#3B82F6',
+    positions: [
+      { symbol: 'AAPL', qty: 150, entry: 195, current: 214, pnl: 9.7, exchange: 'Alpaca' },
+      { symbol: 'NVDA', qty: 100, entry: 95, current: 128, pnl: 34.7, exchange: 'Alpaca' },
+      { symbol: 'TSLA', qty: 80, entry: 265, current: 248, pnl: -6.4, exchange: 'Alpaca' },
+    ]
+  },
+  { id: '3', name: 'Forex Portfolio', initialCapital: 15000, currentValue: 15300, currency: 'USD', color: '#A855F7',
+    positions: [
+      { symbol: 'EURUSD', qty: 50000, entry: 1.0780, current: 1.0842, pnl: 0.6, exchange: 'OANDA' },
+      { symbol: 'XAU', qty: 5, entry: 2350, current: 2387, pnl: 1.6, exchange: 'OANDA' },
+    ]
+  },
+];
 
 export default function PortfoliosPage() {
-  const [portfolios, setPortfolios] = useState<any[]>([]);
-  const [selected, setSelected] = useState<any>(null);
-  const [positions, setPositions] = useState<any[]>([]);
-  const [balances, setBalances] = useState<any[]>([]);
+  const [selected, setSelected] = useState(portfolios[0]);
   const [showCreate, setShowCreate] = useState(false);
-  const [newPort, setNewPort] = useState({ name: '', description: '', initialCapital: 10000 });
 
-  useEffect(() => {
-    loadPortfolios();
-  }, []);
-
-  const loadPortfolios = async () => {
-    try {
-      const { data } = await portfoliosApi.list();
-      setPortfolios(data);
-      if (data.length > 0 && !selected) { setSelected(data[0]); loadPortfolioData(data[0].id); }
-    } catch {
-      // Fallback demo data
-      const demo = [
-        { id: 'demo-1', name: 'Crypto Portfolio', description: 'Main crypto holdings', initialCapital: 50000, currentValue: 67850, pnl: 17850, pnlPct: 35.7 },
-        { id: 'demo-2', name: 'Stock Portfolio', description: 'US equities long-term', initialCapital: 100000, currentValue: 112400, pnl: 12400, pnlPct: 12.4 },
-        { id: 'demo-3', name: 'Forex Portfolio', description: 'Currency trading', initialCapital: 25000, currentValue: 23100, pnl: -1900, pnlPct: -7.6 },
-      ];
-      setPortfolios(demo);
-      setSelected(demo[0]);
-      setPositions([
-        { symbol: 'BTC', exchange: 'binance', side: 'LONG', quantity: 0.85, entryPrice: 58000, currentPrice: 65432, pnl: 6317, pnlPct: 12.8 },
-        { symbol: 'ETH', exchange: 'binance', side: 'LONG', quantity: 8.2, entryPrice: 2900, currentPrice: 3521, pnl: 5072, pnlPct: 21.4 },
-        { symbol: 'SOL', exchange: 'binance', side: 'LONG', quantity: 120, entryPrice: 95, currentPrice: 142, pnl: 5640, pnlPct: 49.5 },
-      ]);
-      setBalances([
-        { asset: 'USDT', free: 12450, locked: 0 },
-        { asset: 'BTC', free: 0.85, locked: 0 },
-        { asset: 'ETH', free: 8.2, locked: 0 },
-      ]);
-    }
-  };
-
-  const loadPortfolioData = async (id: string) => {
-    try {
-      const [pos, bal] = await Promise.all([
-        portfoliosApi.positions(id),
-        portfoliosApi.balances(id),
-      ]);
-      setPositions(pos.data); setBalances(bal.data);
-    } catch {}
-  };
-
-  const createPortfolio = async () => {
-    try {
-      const { data } = await portfoliosApi.create(newPort);
-      setPortfolios([...portfolios, data]);
-      setSelected(data);
-      setShowCreate(false);
-      setNewPort({ name: '', description: '', initialCapital: 10000 });
-    } catch {
-      // Add locally for demo
-      const p = { id: `demo-${Date.now()}`, ...newPort, currentValue: newPort.initialCapital, pnl: 0, pnlPct: 0 };
-      setPortfolios([...portfolios, p]);
-      setSelected(p);
-      setShowCreate(false);
-    }
-  };
-
-  const totalValue = portfolios.reduce((sum, p) => sum + (p.currentValue || 0), 0);
-  const totalPnl = portfolios.reduce((sum, p) => sum + (p.pnl || 0), 0);
-  const totalPnlPct = totalValue > 0 ? (totalPnl / (totalValue - totalPnl)) * 100 : 0;
+  const totalValue = portfolios.reduce((s, p) => s + p.currentValue, 0);
+  const totalPnL = portfolios.reduce((s, p) => s + (p.currentValue - p.initialCapital), 0);
+  const totalPnLPct = (totalPnL / portfolios.reduce((s, p) => s + p.initialCapital, 0)) * 100;
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold mb-1">Portfolios</h1>
-          <p className="text-white/40">Track your holdings across exchanges</p>
+          <p className="text-white/40">Track your positions across exchanges</p>
         </div>
-        <button onClick={() => setShowCreate(true)} className="btn-primary flex items-center gap-2">
-          <Plus size={18} /> New Portfolio
-        </button>
+        <button onClick={() => setShowCreate(true)} className="btn-primary flex items-center gap-2"><Plus size={18} /> New Portfolio</button>
       </div>
 
       {/* Overview Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <div className="card">
-          <div className="flex items-center gap-2 text-white/40 text-sm mb-2"><Wallet size={16} /> Total Value</div>
-          <div className="text-2xl font-bold font-mono">${totalValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+          <div className="flex items-center justify-between mb-2">
+            <Wallet size={20} className="text-[#00D9A3]" />
+            <span className="text-xs text-white/30">Total</span>
+          </div>
+          <div className="text-2xl font-bold font-mono">${totalValue.toLocaleString()}</div>
+          <div className="text-xs text-white/40 mt-1">Across {portfolios.length} portfolios</div>
         </div>
         <div className="card">
-          <div className="flex items-center gap-2 text-white/40 text-sm mb-2"><TrendingUp size={16} /> Total P&L</div>
-          <div className={`text-2xl font-bold font-mono ${totalPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-            {totalPnl >= 0 ? '+' : ''}${totalPnl.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+          <div className="flex items-center justify-between mb-2">
+            {totalPnL >= 0 ? <TrendingUp size={20} className="text-[#00D9A3]" /> : <TrendingDown size={20} className="text-red-400" />}
+            <span className="text-xs text-white/30">Total P&L</span>
+          </div>
+          <div className={`text-2xl font-bold font-mono ${totalPnL >= 0 ? 'text-[#00D9A3]' : 'text-red-400'}`}>
+            {totalPnL >= 0 ? '+' : ''}${totalPnL.toLocaleString()}
+          </div>
+          <div className={`text-xs mt-1 ${totalPnL >= 0 ? 'text-[#00D9A3]' : 'text-red-400'}`}>
+            {totalPnLPct >= 0 ? '+' : ''}{totalPnLPct.toFixed(1)}% all time
           </div>
         </div>
         <div className="card">
-          <div className="flex items-center gap-2 text-white/40 text-sm mb-2"><PieChart size={16} /> Return</div>
-          <div className={`text-2xl font-bold font-mono ${totalPnlPct >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-            {totalPnlPct >= 0 ? '+' : ''}{totalPnlPct.toFixed(2)}%
+          <div className="flex items-center justify-between mb-2">
+            <PieChart size={20} className="text-blue-400" />
+            <span className="text-xs text-white/30">Active Positions</span>
           </div>
+          <div className="text-2xl font-bold">{portfolios.reduce((s, p) => s + p.positions.length, 0)}</div>
+          <div className="text-xs text-white/40 mt-1">Across 3 exchanges</div>
+        </div>
+        <div className="card">
+          <div className="flex items-center justify-between mb-2">
+            <TrendingUp size={20} className="text-purple-400" />
+            <span className="text-xs text-white/30">Win Rate</span>
+          </div>
+          <div className="text-2xl font-bold text-[#00D9A3]">72.3%</div>
+          <div className="text-xs text-white/40 mt-1">Last 30 days</div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Portfolio List */}
-        <div className="space-y-3">
-          {portfolios.map((p) => (
-            <div key={p.id} onClick={() => { setSelected(p); loadPortfolioData(p.id); }}
-              className={`card cursor-pointer transition ${selected?.id === p.id ? 'ring-2 ring-tradeos-accent' : 'hover:bg-white/5'}`}>
-              <div className="font-semibold mb-1">{p.name}</div>
-              <div className="text-xs text-white/40 mb-3">{p.description}</div>
-              <div className="flex items-center justify-between">
-                <span className="font-mono text-lg">${(p.currentValue || 0).toLocaleString()}</span>
-                <span className={`text-sm font-medium ${(p.pnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {(p.pnl || 0) >= 0 ? '+' : ''}{(p.pnlPct || 0).toFixed(1)}%
-                </span>
+      {/* Portfolio Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        {portfolios.map((p) => {
+          const pnl = p.currentValue - p.initialCapital;
+          const pnlPct = (pnl / p.initialCapital) * 100;
+          return (
+            <div key={p.id} onClick={() => setSelected(p)}
+              className={`card cursor-pointer transition ${selected.id === p.id ? 'ring-2 ring-[#00D9A3]' : 'hover:bg-white/5'}`}>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full" style={{ background: p.color }} />
+                  <span className="font-semibold">{p.name}</span>
+                </div>
+                <ArrowRight size={16} className="text-white/30" />
+              </div>
+              <div className="text-2xl font-bold font-mono mb-1">${p.currentValue.toLocaleString()}</div>
+              <div className={`text-sm ${pnl >= 0 ? 'text-[#00D9A3]' : 'text-red-400'}`}>
+                {pnl >= 0 ? '+' : ''}${pnl.toLocaleString()} ({pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(1)}%)
+              </div>
+              <div className="flex items-center gap-2 mt-3 text-xs text-white/30">
+                <span>{p.positions.length} positions</span>
+                <span>·</span>
+                <span>{p.currency}</span>
               </div>
             </div>
-          ))}
-        </div>
-
-        {/* Portfolio Detail */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Balances */}
-          <div className="card">
-            <h3 className="font-semibold mb-4">Balances</h3>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead><tr className="text-left text-white/40 text-sm border-b border-white/5">
-                  <th className="pb-2">Asset</th><th className="pb-2">Available</th><th className="pb-2">Locked</th><th className="pb-2">Value (USD)</th>
-                </tr></thead>
-                <tbody>
-                  {balances.map((b, i) => (
-                    <tr key={i} className="border-b border-white/5">
-                      <td className="py-3 font-mono font-bold">{b.asset}</td>
-                      <td className="py-3 font-mono">{b.free?.toLocaleString()}</td>
-                      <td className="py-3 font-mono text-white/40">{b.locked || 0}</td>
-                      <td className="py-3 font-mono">${(b.free * (b.asset === 'BTC' ? 65432 : b.asset === 'ETH' ? 3521 : 1)).toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
-                    </tr>
-                  ))}
-                  {balances.length === 0 && <tr><td colSpan={4} className="py-6 text-center text-white/30">No balances</td></tr>}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Open Positions */}
-          <div className="card">
-            <h3 className="font-semibold mb-4">Open Positions</h3>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead><tr className="text-left text-white/40 text-sm border-b border-white/5">
-                  <th className="pb-2">Symbol</th><th className="pb-2">Side</th><th className="pb-2">Qty</th><th className="pb-2">Entry</th><th className="pb-2">Current</th><th className="pb-2">P&L</th>
-                </tr></thead>
-                <tbody>
-                  {positions.map((pos, i) => (
-                    <tr key={i} className="border-b border-white/5">
-                      <td className="py-3 font-mono font-bold">{pos.symbol}</td>
-                      <td className="py-3"><span className={`text-xs px-2 py-1 rounded ${pos.side === 'LONG' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>{pos.side}</span></td>
-                      <td className="py-3 font-mono">{pos.quantity}</td>
-                      <td className="py-3 font-mono text-white/60">${pos.entryPrice?.toLocaleString()}</td>
-                      <td className="py-3 font-mono">${pos.currentPrice?.toLocaleString()}</td>
-                      <td className={`py-3 font-mono font-bold ${(pos.pnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                        {(pos.pnl || 0) >= 0 ? '+' : ''}${(pos.pnl || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                        <span className="block text-xs">({(pos.pnlPct || 0).toFixed(1)}%)</span>
-                      </td>
-                    </tr>
-                  ))}
-                  {positions.length === 0 && <tr><td colSpan={6} className="py-6 text-center text-white/30">No open positions</td></tr>}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
+          );
+        })}
       </div>
 
-      {/* Create Portfolio Modal */}
-      {showCreate && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setShowCreate(false)}>
-          <div className="bg-tradeos-dark-2 rounded-xl p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-bold mb-4">Create Portfolio</h3>
-            <div className="space-y-3">
-              <input className="input" placeholder="Portfolio name" value={newPort.name} onChange={(e) => setNewPort({ ...newPort, name: e.target.value })} />
-              <input className="input" placeholder="Description" value={newPort.description} onChange={(e) => setNewPort({ ...newPort, description: e.target.value })} />
-              <input className="input" type="number" placeholder="Initial capital ($)" value={newPort.initialCapital} onChange={(e) => setNewPort({ ...newPort, initialCapital: parseFloat(e.target.value) || 0 })} />
-              <button onClick={createPortfolio} className="btn-primary w-full">Create</button>
-            </div>
-          </div>
+      {/* Selected Portfolio Detail */}
+      <div className="card">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full" style={{ background: selected.color }} />
+            {selected.name} — Positions
+          </h3>
+          <button className="text-[#00D9A3] text-sm hover:underline">Rebalance</button>
         </div>
-      )}
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-white/5 text-xs text-white/40">
+                <th className="text-left p-3 font-medium">Symbol</th>
+                <th className="text-right p-3 font-medium">Quantity</th>
+                <th className="text-right p-3 font-medium">Entry Price</th>
+                <th className="text-right p-3 font-medium">Current Price</th>
+                <th className="text-right p-3 font-medium">Value</th>
+                <th className="text-right p-3 font-medium">P&L %</th>
+                <th className="text-right p-3 font-medium hidden md:table-cell">Exchange</th>
+                <th className="text-center p-3 font-medium"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {selected.positions.map((pos) => {
+                const value = pos.qty * pos.current;
+                const pnlAmt = (pos.current - pos.entry) * pos.qty * (pos.pnl >= 0 ? 1 : 1);
+                return (
+                  <tr key={pos.symbol} className="border-b border-white/5 hover:bg-white/5">
+                    <td className="p-3 font-bold">{pos.symbol}</td>
+                    <td className="p-3 text-right font-mono">{pos.qty}</td>
+                    <td className="p-3 text-right font-mono text-white/60">${pos.entry.toLocaleString()}</td>
+                    <td className="p-3 text-right font-mono">${pos.current.toLocaleString()}</td>
+                    <td className="p-3 text-right font-mono font-bold">${value.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                    <td className="p-3 text-right">
+                      <span className={pos.pnl >= 0 ? 'text-[#00D9A3]' : 'text-red-400'}>
+                        {pos.pnl >= 0 ? '+' : ''}{pos.pnl.toFixed(1)}%
+                      </span>
+                    </td>
+                    <td className="p-3 text-right hidden md:table-cell">
+                      <span className="text-xs px-2 py-1 rounded bg-white/5 text-white/40">{pos.exchange}</span>
+                    </td>
+                    <td className="p-3 text-center">
+                      <button className="text-xs text-red-400 hover:underline">Close</button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }

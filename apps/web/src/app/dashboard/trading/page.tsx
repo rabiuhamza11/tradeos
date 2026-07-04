@@ -1,193 +1,224 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
-import { tradingApi, marketApi } from '@/lib/api';
-import LiveChart from '../components/LiveChart';
+import { useState } from 'react';
+import { Zap, TrendingUp, TrendingDown, X, ArrowDownRight, ArrowUpRight } from 'lucide-react';
+
+const SYMBOLS = ['BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'ADA', 'AVAX', 'DOT', 'AAPL', 'TSLA', 'NVDA', 'EURUSD'];
+const EXCHANGES = ['Binance', 'Coinbase', 'Alpaca', 'OANDA'];
+const ORDER_TYPES = ['MARKET', 'LIMIT', 'STOP', 'STOP_LIMIT'];
+
+const mockOrders = [
+  { id: '1', symbol: 'BTC', exchange: 'Binance', side: 'BUY', type: 'LIMIT', qty: 0.05, price: 64000, status: 'FILLED', time: '14:32:05' },
+  { id: '2', symbol: 'ETH', exchange: 'Binance', side: 'SELL', type: 'MARKET', qty: 1.2, price: 3521, status: 'FILLED', time: '14:28:41' },
+  { id: '3', symbol: 'SOL', exchange: 'Coinbase', side: 'BUY', type: 'LIMIT', qty: 10, price: 138, status: 'PARTIAL', time: '14:15:22' },
+  { id: '4', symbol: 'AAPL', exchange: 'Alpaca', side: 'BUY', type: 'MARKET', qty: 50, price: 214, status: 'FILLED', time: '13:45:10' },
+  { id: '5', symbol: 'NVDA', exchange: 'Alpaca', side: 'SELL', type: 'LIMIT', qty: 20, price: 130, status: 'PENDING', time: '13:30:00' },
+];
 
 export default function TradingPage() {
-  const [symbol, setSymbol] = useState('BTC');
-  const [interval, setInterval] = useState('1h');
-  const [form, setForm] = useState({ assetType: 'CRYPTO', side: 'BUY', type: 'MARKET', quantity: 1, price: 0, portfolioId: '' });
-  const [result, setResult] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
-  const [orderBook, setOrderBook] = useState<{ bids: [number, number][]; asks: [number, number][] }>({ bids: [], asks: [] });
-  const [ticker, setTicker] = useState<any>(null);
-  const wsRef = useRef<any>(null);
+  const [order, setOrder] = useState({
+    symbol: 'BTC', exchange: 'Binance', side: 'BUY' as 'BUY' | 'SELL',
+    type: 'MARKET', quantity: '', price: '', stopPrice: '',
+  });
+  const [orders, setOrders] = useState(mockOrders);
+  const [confirming, setConfirming] = useState(false);
 
-  // Fetch ticker and order book
-  useEffect(() => {
-    async function loadData() {
-      try {
-        const { data } = await marketApi.quote(symbol);
-        setTicker(data);
-        setForm((f) => ({ ...f, price: data.price }));
-      } catch {}
-    }
-    loadData();
-    const refresh = setInterval(loadData, 5000);
-    return () => clearInterval(refresh);
-  }, [symbol]);
+  const currentPrice = order.symbol === 'BTC' ? 65432 : order.symbol === 'ETH' ? 3521 : 142;
+  const estimatedCost = parseFloat(order.quantity || '0') * (order.type === 'MARKET' ? currentPrice : parseFloat(order.price || '0'));
 
-  // WebSocket for live price
-  useEffect(() => {
-    const wsUrl = (process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:4000') + '/stream';
-    try {
-      const ws = new WebSocket(wsUrl);
-      wsRef.current = ws;
-      ws.onopen = () => {
-        ws.send(JSON.stringify({ event: 'subscribe prices', data: { symbols: [symbol] } }));
-      };
-      ws.onmessage = (event) => {
-        try {
-          const msg = JSON.parse(event.data);
-          if (msg.event === 'price update' && msg.data?.symbol === symbol) {
-            setTicker((t: any) => t ? { ...t, price: msg.data.price, changePct: msg.data.changePct } : t);
-          }
-        } catch {}
-      };
-    } catch {}
-    return () => { try { wsRef.current?.close(); } catch {} };
-  }, [symbol]);
+  const submitOrder = () => {
+    if (!order.quantity) return;
+    const newOrder = {
+      id: `${Date.now()}`,
+      symbol: order.symbol,
+      exchange: order.exchange,
+      side: order.side,
+      type: order.type,
+      qty: parseFloat(order.quantity),
+      price: order.type === 'MARKET' ? currentPrice : parseFloat(order.price || '0'),
+      status: 'PENDING',
+      time: new Date().toLocaleTimeString('en-US', { hour12: false }),
+    };
+    setOrders([newOrder, ...orders]);
+    setConfirming(false);
+    setOrder({ ...order, quantity: '', price: '', stopPrice: '' });
+  };
 
-  const submit = async () => {
-    setLoading(true);
-    try {
-      const { data } = await tradingApi.placeOrder({
-        symbol, assetType: form.assetType, side: form.side, type: form.type,
-        quantity: form.quantity, price: form.type !== 'MARKET' ? form.price : undefined,
-        portfolioId: form.portfolioId,
-      });
-      setResult(data);
-    } catch (err: any) {
-      setResult({ error: err.response?.data?.message || 'Order failed' });
-    } finally { setLoading(false); }
+  const cancelOrder = (id: string) => {
+    setOrders(orders.map((o) => o.id === id ? { ...o, status: 'CANCELLED' } : o));
   };
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-1">Trade</h1>
-      <p className="text-white/40 mb-6">Live trading with real exchange integration</p>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold mb-1">Trading</h1>
+          <p className="text-white/40">Place and manage orders across exchanges</p>
+        </div>
+        <div className="flex items-center gap-4 text-sm">
+          <span className="text-white/40">Buying Power:</span>
+          <span className="text-[#00D9A3] font-bold font-mono">$50,000.00</span>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Chart — takes 2 columns */}
-        <div className="lg:col-span-2">
-          <LiveChart symbol={symbol} interval={interval} height={420} />
-          <div className="flex gap-2 mt-3">
-            {['BTC', 'ETH', 'AAPL', 'TSLA', 'EURUSD', 'XAU'].map((s) => (
-              <button
-                key={s}
-                onClick={() => setSymbol(s)}
-                className={`px-4 py-2 rounded-lg font-medium text-sm ${symbol === s ? 'bg-tradeos-accent text-black' : 'bg-white/5 text-white/40 hover:bg-white/10'}`}
-              >
-                {s}
-              </button>
-            ))}
+        {/* Order Form */}
+        <div className="card">
+          <div className="flex gap-2 mb-4">
+            <button onClick={() => setOrder({ ...order, side: 'BUY' })}
+              className={`flex-1 py-2.5 rounded-lg font-medium transition ${order.side === 'BUY' ? 'bg-[#00D9A3] text-black' : 'bg-white/5 text-white/40'}`}>
+              Buy
+            </button>
+            <button onClick={() => setOrder({ ...order, side: 'SELL' })}
+              className={`flex-1 py-2.5 rounded-lg font-medium transition ${order.side === 'SELL' ? 'bg-red-500 text-white' : 'bg-white/5 text-white/40'}`}>
+              Sell
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <label className="text-xs text-white/40 mb-1.5 block">Symbol</label>
+              <select className="input" value={order.symbol} onChange={(e) => setOrder({ ...order, symbol: e.target.value })}>
+                {SYMBOLS.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs text-white/40 mb-1.5 block">Exchange</label>
+              <select className="input" value={order.exchange} onChange={(e) => setOrder({ ...order, exchange: e.target.value })}>
+                {EXCHANGES.map((ex) => <option key={ex} value={ex}>{ex}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs text-white/40 mb-1.5 block">Order Type</label>
+              <select className="input" value={order.type} onChange={(e) => setOrder({ ...order, type: e.target.value })}>
+                {ORDER_TYPES.map((t) => <option key={t} value={t}>{t.replace('_', ' ')}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs text-white/40 mb-1.5 block">Quantity</label>
+              <input type="number" className="input font-mono" placeholder="0.00" value={order.quantity}
+                onChange={(e) => setOrder({ ...order, quantity: e.target.value })} />
+            </div>
+
+            {order.type !== 'MARKET' && (
+              <div>
+                <label className="text-xs text-white/40 mb-1.5 block">Price (USD)</label>
+                <input type="number" className="input font-mono" placeholder="0.00" value={order.price}
+                  onChange={(e) => setOrder({ ...order, price: e.target.value })} />
+              </div>
+            )}
+
+            {order.type === 'STOP_LIMIT' && (
+              <div>
+                <label className="text-xs text-white/40 mb-1.5 block">Stop Price (USD)</label>
+                <input type="number" className="input font-mono" placeholder="0.00" value={order.stopPrice}
+                  onChange={(e) => setOrder({ ...order, stopPrice: e.target.value })} />
+              </div>
+            )}
+
+            {/* Summary */}
+            <div className="p-3 bg-white/5 rounded-lg space-y-1.5 text-sm">
+              <div className="flex justify-between">
+                <span className="text-white/40">Market Price</span>
+                <span className="font-mono">${currentPrice.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-white/40">Est. Cost</span>
+                <span className="font-mono font-bold">${estimatedCost.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-white/40">Est. Fee</span>
+                <span className="font-mono text-white/60">${(estimatedCost * 0.001).toFixed(2)}</span>
+              </div>
+            </div>
+
+            <button onClick={() => setConfirming(true)}
+              className={`w-full py-3 rounded-lg font-bold transition flex items-center justify-center gap-2 ${
+                order.side === 'BUY' ? 'bg-[#00D9A3] text-black hover:bg-[#00D9A3]/90' : 'bg-red-500 text-white hover:bg-red-500/90'
+              }`}>
+              {order.side === 'BUY' ? <ArrowUpRight size={18} /> : <ArrowDownRight size={18} />}
+              {order.side === 'BUY' ? 'Buy' : 'Sell'} {order.symbol}
+            </button>
           </div>
         </div>
 
-        {/* Order Panel + Order Book */}
-        <div className="space-y-6">
-          {/* Order Form */}
-          <div className="card">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold">Place Order</h3>
-              {ticker && <span className="font-mono text-sm text-tradeos-accent">${ticker.price?.toLocaleString()}</span>}
-            </div>
-
-            <div className="flex gap-2 mb-4">
-              <button onClick={() => setForm({ ...form, side: 'BUY' })} className={`flex-1 py-2.5 rounded-lg font-semibold ${form.side === 'BUY' ? 'bg-green-500 text-white' : 'bg-white/5 text-white/40'}`}>BUY</button>
-              <button onClick={() => setForm({ ...form, side: 'SELL' })} className={`flex-1 py-2.5 rounded-lg font-semibold ${form.side === 'SELL' ? 'bg-red-500 text-white' : 'bg-white/5 text-white/40'}`}>SELL</button>
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs text-white/40 mb-1 block">Asset Type</label>
-                <select className="input" value={form.assetType} onChange={(e) => setForm({ ...form, assetType: e.target.value })}>
-                  <option>CRYPTO</option><option>STOCK</option><option>FOREX</option><option>COMMODITY</option><option>ETF</option><option>FUTURE</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs text-white/40 mb-1 block">Order Type</label>
-                <select className="input" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
-                  <option>MARKET</option><option>LIMIT</option><option>STOP</option><option>STOP_LIMIT</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs text-white/40 mb-1 block">Quantity</label>
-                <input className="input" type="number" step="0.0001" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: parseFloat(e.target.value) || 0 })} />
-              </div>
-
-              {form.type !== 'MARKET' && (
-                <div>
-                  <label className="text-xs text-white/40 mb-1 block">Price</label>
-                  <input className="input" type="number" step="0.01" value={form.price} onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })} />
-                </div>
-              )}
-
-              <div>
-                <label className="text-xs text-white/40 mb-1 block">Portfolio ID</label>
-                <input className="input" placeholder="Portfolio ID" value={form.portfolioId} onChange={(e) => setForm({ ...form, portfolioId: e.target.value })} />
-              </div>
-
-              {/* Order Summary */}
-              <div className="p-3 bg-white/5 rounded-lg space-y-1 text-sm">
-                <div className="flex justify-between"><span className="text-white/40">Estimated Cost</span><span className="font-mono">${(form.quantity * (form.price || ticker?.price || 0)).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
-                <div className="flex justify-between"><span className="text-white/40">Est. Fee (0.1%)</span><span className="font-mono">${(form.quantity * (form.price || ticker?.price || 0) * 0.001).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
-                <div className="flex justify-between border-t border-white/5 pt-1"><span className="text-white/40">Total</span><span className="font-mono font-bold">${(form.quantity * (form.price || ticker?.price || 0) * 1.001).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
-              </div>
-
-              <button onClick={submit} disabled={loading} className={`w-full py-3 rounded-lg font-semibold transition ${form.side === 'BUY' ? 'bg-green-500 hover:bg-green-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white'}`}>
-                {loading ? 'Placing...' : `${form.side} ${form.quantity} ${symbol}`}
-              </button>
-
-              {result && (
-                <div className={`p-3 rounded-lg text-sm ${result.error ? 'bg-red-500/10 text-red-400' : 'bg-green-500/10 text-green-400'}`}>
-                  {result.message || result.error}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Order Book (simplified) */}
-          <div className="card">
-            <h3 className="font-semibold mb-3">Order Book</h3>
-            <div className="text-xs space-y-1">
-              <div className="grid grid-cols-3 gap-2 text-white/40 mb-2 pb-2 border-b border-white/5">
-                <span>Price</span><span className="text-right">Size</span><span className="text-right">Total</span>
-              </div>
-              {/* Asks (sells) */}
-              {[...Array(5)].map((_, i) => {
-                const askPrice = (ticker?.ask || ticker?.price || 100) * (1 + (5 - i) * 0.0005);
-                const size = Math.random() * 5;
-                return (
-                  <div key={`ask-${i}`} className="grid grid-cols-3 gap-2 text-red-400">
-                    <span className="font-mono">{askPrice.toFixed(2)}</span>
-                    <span className="text-right font-mono">{size.toFixed(4)}</span>
-                    <span className="text-right font-mono text-white/40">{(askPrice * size).toFixed(0)}</span>
-                  </div>
-                );
-              })}
-              {/* Spread */}
-              <div className="text-center py-1 text-tradeos-accent font-mono text-xs">
-                Spread: {((ticker?.ask || 0) - (ticker?.bid || 0)).toFixed(2)}
-              </div>
-              {/* Bids (buys) */}
-              {[...Array(5)].map((_, i) => {
-                const bidPrice = (ticker?.bid || ticker?.price || 100) * (1 - (i + 1) * 0.0005);
-                const size = Math.random() * 5;
-                return (
-                  <div key={`bid-${i}`} className="grid grid-cols-3 gap-2 text-green-400">
-                    <span className="font-mono">{bidPrice.toFixed(2)}</span>
-                    <span className="text-right font-mono">{size.toFixed(4)}</span>
-                    <span className="text-right font-mono text-white/40">{(bidPrice * size).toFixed(0)}</span>
-                  </div>
-                );
-              })}
-            </div>
+        {/* Open Orders */}
+        <div className="lg:col-span-2 card">
+          <h3 className="font-semibold mb-4 flex items-center gap-2"><Zap size={18} /> Active Orders</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-white/5 text-xs text-white/40">
+                  <th className="text-left p-2 font-medium">Time</th>
+                  <th className="text-left p-2 font-medium">Symbol</th>
+                  <th className="text-left p-2 font-medium">Side</th>
+                  <th className="text-left p-2 font-medium">Type</th>
+                  <th className="text-right p-2 font-medium">Qty</th>
+                  <th className="text-right p-2 font-medium">Price</th>
+                  <th className="text-right p-2 font-medium">Status</th>
+                  <th className="text-center p-2 font-medium"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {orders.map((o) => (
+                  <tr key={o.id} className="border-b border-white/5 hover:bg-white/5">
+                    <td className="p-2 text-xs text-white/30 font-mono">{o.time}</td>
+                    <td className="p-2 font-bold">{o.symbol}</td>
+                    <td className="p-2">
+                      <span className={o.side === 'BUY' ? 'text-[#00D9A3]' : 'text-red-400'}>
+                        {o.side === 'BUY' ? <TrendingUp size={14} className="inline" /> : <TrendingDown size={14} className="inline" />} {o.side}
+                      </span>
+                    </td>
+                    <td className="p-2 text-xs text-white/40">{o.type.replace('_', ' ')}</td>
+                    <td className="p-2 text-right font-mono">{o.qty}</td>
+                    <td className="p-2 text-right font-mono">${o.price.toLocaleString()}</td>
+                    <td className="p-2 text-right">
+                      <span className={`text-xs px-2 py-1 rounded-full ${
+                        o.status === 'FILLED' ? 'bg-green-500/20 text-green-400' :
+                        o.status === 'PENDING' ? 'bg-yellow-500/20 text-yellow-400' :
+                        o.status === 'PARTIAL' ? 'bg-blue-500/20 text-blue-400' :
+                        'bg-red-500/20 text-red-400'
+                      }`}>{o.status}</span>
+                    </td>
+                    <td className="p-2 text-center">
+                      {(o.status === 'PENDING' || o.status === 'PARTIAL') && (
+                        <button onClick={() => cancelOrder(o.id)} className="text-white/30 hover:text-red-400">
+                          <X size={16} />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
+
+      {/* Confirm Modal */}
+      {confirming && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setConfirming(false)}>
+          <div className="card max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-bold mb-4">Confirm Order</h3>
+            <div className="space-y-2 text-sm mb-6">
+              <div className="flex justify-between"><span className="text-white/40">Action</span><span className={order.side === 'BUY' ? 'text-[#00D9A3]' : 'text-red-400'}>{order.side}</span></div>
+              <div className="flex justify-between"><span className="text-white/40">Symbol</span><span className="font-bold">{order.symbol}</span></div>
+              <div className="flex justify-between"><span className="text-white/40">Exchange</span><span>{order.exchange}</span></div>
+              <div className="flex justify-between"><span className="text-white/40">Type</span><span>{order.type.replace('_', ' ')}</span></div>
+              <div className="flex justify-between"><span className="text-white/40">Quantity</span><span className="font-mono">{order.quantity}</span></div>
+              <div className="flex justify-between"><span className="text-white/40">Est. Cost</span><span className="font-mono font-bold">${estimatedCost.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirming(false)} className="flex-1 py-2.5 rounded-lg bg-white/5 text-white/60 hover:bg-white/10">Cancel</button>
+              <button onClick={submitOrder} className={`flex-1 py-2.5 rounded-lg font-bold ${order.side === 'BUY' ? 'bg-[#00D9A3] text-black' : 'bg-red-500 text-white'}`}>
+                Confirm {order.side}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
