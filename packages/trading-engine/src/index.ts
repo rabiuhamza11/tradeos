@@ -1,189 +1,246 @@
-// TradeOS Trading Engine — Core order execution, position management, and strategy runner
+// TradeOS Trading Engine — Core order execution and routing
+// Handles order validation, risk checks, and multi-exchange routing
+
+export type OrderSide = 'BUY' | 'SELL';
+export type OrderType = 'MARKET' | 'LIMIT' | 'STOP' | 'STOP_LIMIT';
+export type OrderStatus = 'PENDING' | 'SUBMITTED' | 'PARTIAL' | 'FILLED' | 'CANCELLED' | 'REJECTED';
 
 export interface OrderRequest {
+  id: string;
   symbol: string;
-  assetType: AssetType;
+  exchange: string;
   side: OrderSide;
   type: OrderType;
   quantity: number;
   price?: number;
   stopPrice?: number;
-  timeInForce?: TimeInForce;
   portfolioId: string;
+  userId: string;
+  timeInForce?: 'GTC' | 'IOC' | 'FOK' | 'GTD';
+  expiresAt?: Date;
 }
 
-export interface ExecutionResult {
+export interface OrderResult {
   orderId: string;
-  status: 'FILLED' | 'PARTIALLY_FILLED' | 'PENDING' | 'REJECTED';
+  exchangeOrderId?: string;
+  status: OrderStatus;
   filledQty: number;
-  avgFillPrice: number;
-  fees: number;
+  avgFillPrice?: number;
+  totalCost?: number;
+  fee?: number;
+  error?: string;
   timestamp: number;
 }
 
-export enum AssetType { STOCK = 'STOCK', CRYPTO = 'CRYPTO', FOREX = 'FOREX', COMMODITY = 'COMMODITY', ETF = 'ETF', BOND = 'BOND', OPTION = 'OPTION', FUTURE = 'FUTURE' }
-export enum OrderSide { BUY = 'BUY', SELL = 'SELL' }
-export enum OrderType { MARKET = 'MARKET', LIMIT = 'LIMIT', STOP = 'STOP', STOP_LIMIT = 'STOP_LIMIT', TRAILING_STOP = 'TRAILING_STOP', BRACKET = 'BRACKET' }
-export enum TimeInForce { GTC = 'GTC', IOC = 'IOC', FOK = 'FOK', DAY = 'DAY', GTT = 'GTT' }
-
-// ============ ORDER MANAGER ============
-
-export class OrderManager {
-  private pendingOrders: Map<string, OrderRequest> = new Map();
-
-  submit(order: OrderRequest): string {
-    const orderId = `ord_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-    this.pendingOrders.set(orderId, order);
-    return orderId;
-  }
-
-  cancel(orderId: string): boolean {
-    return this.pendingOrders.delete(orderId);
-  }
-
-  getPending(): OrderRequest[] {
-    return Array.from(this.pendingOrders.values());
-  }
+export interface RiskConfig {
+  maxPositionSize: number;       // Max $ per position
+  maxPortfolioExposure: number;  // Max % of portfolio invested
+  maxSingleTradeRisk: number;    // Max % risk per trade
+  maxDailyLoss: number;          // Max $ daily loss
+  maxOpenPositions: number;      // Max concurrent positions
+  allowedExchanges: string[];
 }
 
-// ============ POSITION MANAGER ============
+// ============ TRADING ENGINE ============
 
-export interface Position {
-  symbol: string;
-  quantity: number;
-  avgEntryPrice: number;
-  currentPrice: number;
-  marketValue: number;
-  unrealizedPnL: number;
-  realizedPnL: number;
-  side: 'LONG' | 'SHORT';
-}
+export class TradingEngine {
+  private orders: Map<string, OrderRequest> = new Map();
+  private fills: Map<string, OrderResult> = new Map();
+  private riskConfig: RiskConfig;
+  private dailyPnL: number = 0;
+  private openPositionCount: number = 0;
 
-export class PositionManager {
-  private positions: Map<string, Position> = new Map();
+  constructor(riskConfig?: Partial<RiskConfig>) {
+    this.riskConfig = {
+      maxPositionSize: 50000,
+      maxPortfolioExposure: 0.80,
+      maxSingleTradeRisk: 0.02,
+      maxDailyLoss: 5000,
+      maxOpenPositions: 20,
+      allowedExchanges: ['binance', 'binance_futures', 'coinbase', 'alpaca', 'oanda'],
+      ...riskConfig,
+    };
+  }
 
-  openOrUpdate(symbol: string, side: 'LONG' | 'SHORT', qty: number, price: number): Position {
-    const existing = this.positions.get(symbol);
-    if (existing) {
-      if (side === 'LONG') {
-        const newQty = existing.quantity + qty;
-        const newAvg = (existing.avgEntryPrice * existing.quantity + price * qty) / newQty;
-        const updated = { ...existing, quantity: newQty, avgEntryPrice: newAvg, currentPrice: price, marketValue: newQty * price, unrealizedPnL: (price - newAvg) * newQty };
-        this.positions.set(symbol, updated);
-        return updated;
-      } else {
-        const remaining = existing.quantity - qty;
-        if (remaining <= 0) {
-          const realized = (price - existing.avgEntryPrice) * existing.quantity;
-          this.positions.delete(symbol);
-          return { ...existing, quantity: 0, realizedPnL: existing.realizedPnL + realized, marketValue: 0, unrealizedPnL: 0 };
-        }
-        const realized = (price - existing.avgEntryPrice) * qty;
-        const updated = { ...existing, quantity: remaining, currentPrice: price, marketValue: remaining * price, realizedPnL: existing.realizedPnL + realized, unrealizedPnL: (price - existing.avgEntryPrice) * remaining };
-        this.positions.set(symbol, updated);
-        return updated;
+  // ============ ORDER VALIDATION ============
+
+  validateOrder(order: OrderRequest): { valid: boolean; errors: string[] } {
+    const errors: string[] = [];
+
+    // Check exchange
+    if (!this.riskConfig.allowedExchanges.includes(order.exchange)) {
+      errors.push(`Exchange not allowed: ${order.exchange}`);
+    }
+
+    // Check quantity
+    if (order.quantity <= 0) {
+      errors.push('Quantity must be positive');
+    }
+
+    // Check price for limit orders
+    if (order.type === 'LIMIT' || order.type === 'STOP_LIMIT') {
+      if (!order.price || order.price <= 0) {
+        errors.push('Limit orders require a valid price');
       }
     }
-    const pos: Position = { symbol, quantity: qty, avgEntryPrice: price, currentPrice: price, marketValue: qty * price, unrealizedPnL: 0, realizedPnL: 0, side };
-    this.positions.set(symbol, pos);
-    return pos;
-  }
 
-  close(symbol: string, price: number): Position | null {
-    const pos = this.positions.get(symbol);
-    if (!pos) return null;
-    const realized = (price - pos.avgEntryPrice) * pos.quantity;
-    this.positions.delete(symbol);
-    return { ...pos, realizedPnL: pos.realizedPnL + realized, quantity: 0, marketValue: 0, unrealizedPnL: 0 };
-  }
-
-  updatePrice(symbol: string, newPrice: number): void {
-    const pos = this.positions.get(symbol);
-    if (pos) {
-      pos.currentPrice = newPrice;
-      pos.marketValue = pos.quantity * newPrice;
-      pos.unrealizedPnL = (newPrice - pos.avgEntryPrice) * pos.quantity;
-    }
-  }
-
-  getAll(): Position[] { return Array.from(this.positions.values()); }
-  getTotalValue(): number { return this.positions.values().reduce((s, p) => s + p.marketValue, 0); }
-  getTotalPnL(): number { return this.positions.values().reduce((s, p) => s + p.unrealizedPnL + p.realizedPnL, 0); }
-}
-
-// ============ STRATEGY RUNNER ============
-
-export interface StrategyConfig {
-  name: string;
-  type: 'TREND_FOLLOWING' | 'MEAN_REVERSION' | 'MOMENTUM' | 'SCALPING' | 'SWING' | 'AI_PREDICTION';
-  symbols: string[];
-  maxPositions: number;
-  riskPerTrade: number; // % of portfolio
-  stopLossPct?: number;
-  takeProfitPct?: number;
-  enabled: boolean;
-}
-
-export class StrategyRunner {
-  private strategies: Map<string, StrategyConfig> = new Map();
-
-  register(config: StrategyConfig): string {
-    const id = `strat_${Date.now()}`;
-    this.strategies.set(id, { ...config, enabled: true });
-    console.log(`📊 Strategy registered: ${config.name} (${config.type})`);
-    return id;
-  }
-
-  async evaluate(id: string, marketData: Record<string, any>): Promise<OrderRequest[]> {
-    const strat = this.strategies.get(id);
-    if (!strat || !strat.enabled) return [];
-
-    const orders: OrderRequest[] = [];
-    for (const symbol of strat.symbols) {
-      const data = marketData[symbol];
-      if (!data) continue;
-
-      // Simplified strategy logic — in production, use real indicators
-      if (strat.type === 'TREND_FOLLOWING' && data.changePct > 0.02) {
-        orders.push({ symbol, assetType: AssetType.CRYPTO, side: OrderSide.BUY, type: OrderType.MARKET, quantity: 1, portfolioId: 'default' });
-      } else if (strat.type === 'MEAN_REVERSION' && data.changePct < -0.02) {
-        orders.push({ symbol, assetType: AssetType.CRYPTO, side: OrderSide.BUY, type: OrderType.MARKET, quantity: 1, portfolioId: 'default' });
-      } else if (strat.type === 'MOMENTUM' && data.volume > 1000000) {
-        orders.push({ symbol, assetType: AssetType.STOCK, side: data.changePct > 0 ? OrderSide.BUY : OrderSide.SELL, type: OrderType.MARKET, quantity: 1, portfolioId: 'default' });
+    // Check stop price
+    if (order.type === 'STOP' || order.type === 'STOP_LIMIT') {
+      if (!order.stopPrice || order.stopPrice <= 0) {
+        errors.push('Stop orders require a stop price');
       }
     }
+
+    // Risk checks
+    const estimatedCost = order.quantity * (order.price || this.getMarketPrice(order.symbol));
+
+    if (estimatedCost > this.riskConfig.maxPositionSize) {
+      errors.push(`Position size $${estimatedCost.toFixed(2)} exceeds max $${this.riskConfig.maxPositionSize}`);
+    }
+
+    if (this.openPositionCount >= this.riskConfig.maxOpenPositions) {
+      errors.push(`Max open positions (${this.riskConfig.maxOpenPositions}) reached`);
+    }
+
+    if (this.dailyPnL <= -this.riskConfig.maxDailyLoss) {
+      errors.push(`Daily loss limit ($${this.riskConfig.maxDailyLoss}) reached — trading halted`);
+    }
+
+    return { valid: errors.length === 0, errors };
+  }
+
+  // ============ ORDER EXECUTION ============
+
+  async executeOrder(order: OrderRequest): Promise<OrderResult> {
+    // Validate
+    const validation = this.validateOrder(order);
+    if (!validation.valid) {
+      return {
+        orderId: order.id,
+        status: 'REJECTED',
+        filledQty: 0,
+        error: validation.errors.join('; '),
+        timestamp: Date.now(),
+      };
+    }
+
+    this.orders.set(order.id, order);
+
+    // Simulate exchange submission
+    await new Promise((resolve) => setTimeout(resolve, 200 + Math.random() * 300));
+
+    // Simulate fill (in production, this would poll the exchange API)
+    const fillPrice = order.type === 'MARKET'
+      ? this.getMarketPrice(order.symbol)
+      : order.price || this.getMarketPrice(order.symbol);
+
+    const filledQty = order.quantity;
+    const totalCost = filledQty * fillPrice;
+    const fee = totalCost * this.getFeeRate(order.exchange);
+
+    const result: OrderResult = {
+      orderId: order.id,
+      exchangeOrderId: `EX-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+      status: 'FILLED',
+      filledQty,
+      avgFillPrice: fillPrice,
+      totalCost,
+      fee,
+      timestamp: Date.now(),
+    };
+
+    this.fills.set(order.id, result);
+    this.openPositionCount++;
+    console.log(`✅ Order filled: ${order.side} ${filledQty} ${order.symbol} @ $${fillPrice} (fee: $${fee.toFixed(2)})`);
+
+    return result;
+  }
+
+  async cancelOrder(orderId: string): Promise<{ success: boolean; message: string }> {
+    const order = this.orders.get(orderId);
+    if (!order) return { success: false, message: 'Order not found' };
+
+    const fill = this.fills.get(orderId);
+    if (fill && fill.status === 'FILLED') {
+      return { success: false, message: 'Cannot cancel filled order' };
+    }
+
+    this.orders.delete(orderId);
+    return { success: true, message: 'Order cancelled' };
+  }
+
+  // ============ POSITION MANAGEMENT ============
+
+  closePosition(symbol: string, exchange: string): OrderResult | null {
+    // In production, this would create a counter-order to close the position
+    const fill = Array.from(this.fills.values()).find(
+      (f) => f.avgFillPrice !== undefined
+    );
+    return fill || null;
+  }
+
+  // ============ RISK MANAGEMENT ============
+
+  updateRiskConfig(config: Partial<RiskConfig>): void {
+    this.riskConfig = { ...this.riskConfig, ...config };
+    console.log('⚠️ Risk config updated:', config);
+  }
+
+  getRiskMetrics(): {
+    dailyPnL: number;
+    openPositions: number;
+    maxPositions: number;
+    exposure: number;
+    maxExposure: number;
+  } {
+    return {
+      dailyPnL: this.dailyPnL,
+      openPositions: this.openPositionCount,
+      maxPositions: this.riskConfig.maxOpenPositions,
+      exposure: 0, // Would calculate from actual portfolio
+      maxExposure: this.riskConfig.maxPortfolioExposure,
+    };
+  }
+
+  // ============ HELPERS ============
+
+  private getMarketPrice(symbol: string): number {
+    const prices: Record<string, number> = {
+      BTC: 65432, ETH: 3521, SOL: 142, AAPL: 214, TSLA: 248,
+      EURUSD: 1.0842, XAU: 2387, ADA: 0.45, AVAX: 28.5, DOT: 6.2,
+    };
+    return prices[symbol] || 100;
+  }
+
+  private getFeeRate(exchange: string): number {
+    const fees: Record<string, number> = {
+      binance: 0.001,      // 0.1%
+      binance_futures: 0.0004, // 0.04%
+      coinbase: 0.006,     // 0.6%
+      alpaca: 0.0,         // Commission-free
+      oanda: 0.0001,       // Spread-based
+    };
+    return fees[exchange] || 0.001;
+  }
+
+  // ============ ORDER HISTORY ============
+
+  getOrderHistory(userId?: string): OrderRequest[] {
+    const orders = Array.from(this.orders.values());
+    if (userId) return orders.filter((o) => o.userId === userId);
     return orders;
   }
 
-  pause(id: string): void {
-    const s = this.strategies.get(id);
-    if (s) s.enabled = false;
-  }
-
-  resume(id: string): void {
-    const s = this.strategies.get(id);
-    if (s) s.enabled = true;
-  }
-
-  getAll(): StrategyConfig[] { return Array.from(this.strategies.values()); }
-}
-
-// ============ RISK MANAGER ============
-
-export class RiskManager {
-  checkOrder(order: OrderRequest, portfolioValue: number, currentExposure: number): { allowed: boolean; reason?: string } {
-    const orderValue = (order.price || 0) * order.quantity;
-    const maxExposure = portfolioValue * 0.25; // Max 25% per position
-    if (orderValue > maxExposure) return { allowed: false, reason: 'Order exceeds max position size (25% of portfolio)' };
-    if (currentExposure + orderValue > portfolioValue * 2) return { allowed: false, reason: 'Total exposure exceeds 2x portfolio value' };
-    return { allowed: true };
-  }
-
-  calculatePositionSize(portfolioValue: number, entryPrice: number, stopLoss: number, riskPct: number = 1): number {
-    const riskAmount = portfolioValue * (riskPct / 100);
-    const riskPerShare = Math.abs(entryPrice - stopLoss);
-    return riskPerShare > 0 ? Math.floor(riskAmount / riskPerShare) : 0;
+  getFills(orderId?: string): OrderResult[] {
+    if (orderId) {
+      const fill = this.fills.get(orderId);
+      return fill ? [fill] : [];
+    }
+    return Array.from(this.fills.values());
   }
 }
 
-export { OrderManager, PositionManager, StrategyRunner, RiskManager };
+// ============ EXPORTS ============
+
+export { TradingEngine };
+export type { OrderRequest, OrderResult, RiskConfig, OrderSide, OrderType, OrderStatus };
