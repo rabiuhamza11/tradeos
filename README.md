@@ -1,142 +1,144 @@
-# 📊 TradeOS — Enterprise AI Trading Platform
+# 📊 TradeOS
 
-[![CI/CD](https://github.com/tradeos/tradeos/actions/workflows/ci.yml/badge.svg)](https://github.com/tradeos/tradeos)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+> Enterprise AI Trading Platform — Multi-exchange, real-time WebSocket streaming, AI agents, and portfolio management.
 
-**AI-powered trading platform with multi-exchange support, portfolio management, automated strategies, and real-time analytics.**
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.4-blue.svg)](https://www.typescriptlang.org/)
+[![NestJS](https://img.shields.io/badge/NestJS-10.3-red.svg)](https://nestjs.com/)
+[![Next.js](https://img.shields.io/badge/Next.js-14-black.svg)](https://nextjs.org/)
+[![Prisma](https://img.shields.io/badge/Prisma-5.10-2D3748.svg)](https://www.prisma.io/)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg)](https://www.docker.com/)
+[![K8s](https://img.shields.io/badge/Kubernetes-Ready-326CE5.svg)](https://kubernetes.io/)
+[![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-success.svg)](https://github.com/rabiuhamza11/tradeos)
 
-## Technology Stack
+![GitHub last commit](https://img.shields.io/github/last-commit/rabiuhamza11/tradeos)
+![GitHub repo size](https://img.shields.io/github/repo-size/rabiuhamza11/tradeos)
+![GitHub issues](https://img.shields.io/github/issues/rabiuhamza11/tradeos)
 
-| Layer | Technology |
-|-------|-----------|
-| Frontend (Web) | Next.js 14, React 18, TypeScript, Tailwind CSS, Recharts |
-| Frontend (Mobile) | React Native |
-| Frontend (Desktop) | Electron |
-| Backend | NestJS 10, TypeScript, REST API, Swagger |
-| Database | PostgreSQL 16, Prisma ORM |
-| Cache/Queue | Redis 7 |
-| Auth | JWT (access + refresh), 2FA (TOTP), OAuth (Google, GitHub), RBAC |
-| Infra | Docker, Docker Compose, Kubernetes, GitHub Actions, GitLab CI, Bitbucket Pipelines |
-| Deploy | Vercel (web), Render (API), Docker Hub |
-| Build | Turborepo (monorepo) |
+---
 
-## Monorepo Structure
+## 🌟 Overview
+
+TradeOS is a full-stack enterprise trading platform supporting multiple asset classes (Crypto, Stocks, Forex, Commodities) across 5 exchanges with real-time WebSocket streaming, AI-powered trading agents, and live portfolio management.
+
+## 🔗 Supported Exchanges
+
+| Exchange | Asset Type | Live Data | Trading | WebSocket |
+|----------|-----------|-----------|---------|-----------|
+| Binance Spot | Crypto | ✅ | ✅ | ✅ |
+| Binance Futures | Crypto Futures | ✅ | ✅ | ✅ |
+| Coinbase Advanced | Crypto | ✅ | ✅ | ✅ |
+| Alpaca Markets | US Stocks, ETFs | ✅ | ✅ | ✅ |
+| OANDA | Forex, CFDs | ✅ | ✅ | ✅ |
+
+## ✨ Features
+
+- **5 Exchange Adapters** — Binance (Spot + Futures), Coinbase, Alpaca, OANDA
+- **Real-time WebSocket Streaming** — Live prices, candles, order book, and order fills
+- **Live Candlestick Charts** — Canvas-based rendering with real-time updates
+- **AI Trading Agents** — 6 specialized agents for different strategies
+- **Portfolio Management** — Live P&L tracking, positions, multi-portfolio support
+- **Order Management** — Market, Limit, Stop, Stop-Limit orders across all exchanges
+- **Analytics Dashboard** — Performance metrics, trade history, risk analysis
+- **Watchlist** — Track favorite symbols with real-time updates
+- **Multi-Platform** — Web (Next.js), Mobile (React Native), Desktop (Electron)
+- **Auth** — JWT with 2FA, OAuth (Google, GitHub)
+- **Infrastructure** — Docker, Kubernetes, CI/CD (GitHub Actions, Bitbucket)
+
+## 🏗️ Architecture
 
 ```
 tradeos/
 ├── apps/
-│   ├── web/                 # Next.js Dashboard (trading UI, charts, analytics)
-│   ├── api/                 # NestJS Backend (auth, trading, portfolios, markets)
-│   ├── mobile/              # React Native App (iOS/Android)
-│   └── desktop/             # Electron App (Windows/Mac/Linux)
-│
+│   ├── api/                # NestJS backend (10 modules)
+│   │   ├── src/
+│   │   │   ├── auth/       # JWT + OAuth + 2FA
+│   │   │   ├── trading/    # Order execution → exchange routing
+│   │   │   ├── markets/    # Real-time market data
+│   │   │   ├── portfolios/ # Portfolio & position management
+│   │   │   ├── analytics/  # Performance & risk analytics
+│   │   │   ├── watchlist/  # Symbol tracking
+│   │   │   ├── stream/     # WebSocket gateway (Socket.IO)
+│   │   │   └── users/      # Profile + API key management
+│   ├── web/                # Next.js 14 dashboard
+│   ├── mobile/             # React Native app
+│   └── desktop/            # Electron app
 ├── packages/
-│   ├── ai-engine/           # Technical analysis, predictions, sentiment
-│   ├── agent-sdk/           # 6 AI trading agents (analyst, risk, strategy, execution, news, rebalancer)
-│   ├── trading-engine/      # Order execution, position management, strategy runner, risk manager
-│   ├── analytics/           # Performance metrics, reporting, equity curves
-│   ├── blockchain/          # Wallet management, DeFi scanning, on-chain analytics
-│   ├── cybersecurity/       # Security auditing, encryption, threat detection
-│   ├── voice/               # Voice commands and TTS for hands-free trading
-│   ├── video/               # Chart rendering, market visualizations
-│   ├── automation/          # Workflow automation, triggers, scheduled tasks
-│   ├── notifications/       # Multi-channel: push, email, SMS, WhatsApp, Telegram
-│   └── shared/              # Common types, utilities, constants
-│
-├── prisma/
-│   ├── schema.prisma        # 16 database models
-│   └── migrations/
-│
-├── docker/                  # Dockerfiles (API + Web)
-├── kubernetes/              # K8s deployments, services, HPA
-├── .github/workflows/       # GitHub Actions CI/CD
-├── gitlab/                  # GitLab CI config
-├── bitbucket/               # Bitbucket Pipelines config
-├── docs/                    # Documentation
-├── scripts/                 # Utility scripts
-│
-├── .env.example
-├── docker-compose.yml       # PostgreSQL + Redis + API + Web
-├── package.json
-├── turbo.json               # Turborepo build config
-├── README.md
-└── LICENSE
+│   ├── exchange-adapters/  # 5 exchange adapters + WebSocket streams
+│   ├── ai-engine/          # AI trading agents
+│   ├── trading-engine/     # Core trading logic
+│   ├── exchange-adapters/  # Binance, Coinbase, Alpaca, OANDA
+│   ├── notifications/      # Push, email, SMS
+│   ├── blockchain/         # On-chain analytics
+│   ├── automation/         # Strategy automation
+│   ├── cybersecurity/      # Security hardening
+│   └── shared/             # Shared types & utilities
+├── prisma/                 # 16 database models
+├── docker/                 # Dockerfiles + docker-compose
+├── kubernetes/             # K8s deployment
+└── .github/workflows/      # CI/CD pipeline
 ```
 
-## Core Features
-
-### Trading
-- Multi-asset support: Stocks, Crypto, Forex, Commodities, ETFs, Bonds, Options, Futures
-- Order types: Market, Limit, Stop, Stop-Limit, Trailing Stop, Bracket
-- Real-time position tracking with P&L
-- Trade history with full audit trail
-
-### Portfolio Management
-- Multiple portfolios per user
-- Real-time valuation
-- Asset allocation tracking
-- Performance analytics (Sharpe, Sortino, max drawdown, win rate)
-
-### AI Engine
-- Technical indicators: RSI, MACD, SMA, EMA, Bollinger Bands, ATR, Stochastic
-- AI price predictions with confidence scoring
-- Sentiment analysis from news and social
-- Trading signals: Strong Buy → Strong Sell
-
-### AI Agents (6)
-1. Market Analyst — scans for opportunities and trends
-2. Risk Manager — monitors exposure, enforces limits
-3. Strategy Optimizer — backtests and optimizes strategies
-4. Execution Agent — optimal trade execution
-5. News Monitor — sentiment-based signals
-6. Portfolio Rebalancer — auto-rebalancing
-
-### Security
-- JWT auth with refresh token rotation
-- Two-factor authentication (TOTP)
-- API key encryption (AES-256-GCM)
-- Threat detection and audit logging
-- KYC compliance support
-
-### Infrastructure
-- Docker + Docker Compose for local development
-- Kubernetes manifests with autoscaling (3-10 replicas)
-- CI/CD for GitHub, GitLab, and Bitbucket
-- Deploy to Vercel (web), Render (API), Docker Hub
-
-## Quick Start
+## 🚀 Quick Start
 
 ```bash
-git clone https://github.com/tradeos/tradeos.git
+# Clone
+git clone https://github.com/rabiuhamza11/tradeos.git
 cd tradeos
+
+# Install
 npm install
-cp .env.example .env  # Edit with your values
-docker-compose up -d  # Start PostgreSQL + Redis
+
+# Configure
+cp .env.example .env
+# Add your exchange API keys
+
+# Database
+npx prisma generate
 npx prisma migrate dev
 npx prisma db seed
-npm run dev  # Starts API (4000) + Web (3000)
+
+# Start backend (port 4000)
+cd apps/api && npm run start:dev
+
+# Start frontend (port 3000)
+cd apps/web && npm run dev
 ```
 
-- Web: http://localhost:3000
-- API: http://localhost:4000
-- Swagger: http://localhost:4000/api/docs
+## 🔑 Environment Variables
 
-## API Endpoints
+See [.env.example](.env.example) for all configuration. Key variables:
 
-```
-Auth:     POST /auth/register, /auth/login, /auth/refresh, /auth/logout, /auth/2fa/enable
-Users:    GET /users/profile, PUT /users/profile, POST /users/kyc
-Markets:  GET /markets, /markets/movers, /markets/:symbol, /markets/:symbol/candles
-Trading:  POST /trading/order, DELETE /trading/order/:id, GET /trading/orders, /trading/trades
-Portfolios: POST /portfolios, GET /portfolios, GET /portfolios/:id/positions, /performance
-Analytics: GET /analytics/dashboard, /analytics/trades, /analytics/risk
-Watchlist: POST /watchlist, GET /watchlist, POST /watchlist/:id/add
-```
+- `BINANCE_API_KEY` / `BINANCE_API_SECRET` — Binance Spot
+- `BINANCE_FUTURES_API_KEY` / `BINANCE_FUTURES_API_SECRET` — Binance Futures
+- `COINBASE_API_KEY` / `COINBASE_API_SECRET` — Coinbase
+- `ALPACA_API_KEY` / `ALPACA_API_SECRET` — Alpaca (Stocks)
+- `OANDA_API_KEY` / `OANDA_ACCOUNT_ID` — OANDA (Forex)
+- `EXCHANGE_TESTNET=true` — Paper trading mode (default)
 
-## Database Models (16)
+## 📊 Database Models (16)
 
-User, RefreshToken, Portfolio, Allocation, Position, Order, Trade, Watchlist, WatchlistItem, Alert, Strategy, Conversation, Message, ApiKey, Notification, AuditLog
+User, Organization, ApiKey, Portfolio, Order, Trade, Position, Watchlist, WatchlistItem, AiAgent, AgentExecution, Notification, TradeJournal, TradeJournalEntry, Deployment, RefreshToken
 
-## License
+## 🤖 AI Agents
 
-MIT © 2026 TradeOS
+1. **Scalper Agent** — High-frequency micro-profits
+2. **Swing Agent** — Multi-day trend capture
+3. **Arbitrage Agent** — Cross-exchange price gaps
+4. **Risk Manager** — Position sizing & exposure limits
+5. **Sentiment Agent** — News & social sentiment analysis
+6. **Portfolio Rebalancer** — Auto-rebalance allocations
+
+## 👤 Author
+
+**Rabiu Hamza Mohammed**
+- Email: harzco.business@gmail.com
+- GitHub: [@rabiuhamza11](https://github.com/rabiuhamza11)
+
+## 📄 License
+
+MIT License — see [LICENSE](LICENSE) for details.
+
+## ⚠️ Disclaimer
+
+TradeOS is for educational and professional use. Trading involves risk. Always test with paper trading (testnet) before going live. The authors are not responsible for any financial losses.
