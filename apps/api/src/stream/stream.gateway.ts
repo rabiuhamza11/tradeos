@@ -1,105 +1,143 @@
+// TradeOS — WebSocket Gateway (Socket.IO)
+// Real-time streaming server for market data, order updates, and portfolio changes
+
 import {
-  WebSocketGateway, WebSocketServer, OnGatewayConnection, OnGatewayDisconnect,
-  SubscribeMessage, ConnectedSocket, MessageBody,
+  WebSocketGateway,
+  WebSocketServer,
+  SubscribeMessage,
+  MessageBody,
+  ConnectedSocket,
+  OnGatewayConnection,
+  OnGatewayDisconnect,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { ExchangeService } from '../common/exchange.service';
+import { Logger } from '@nestjs/common';
+import { BinanceWS } from '../../../packages/exchange-adapters/src/binance-ws';
+import { CoinbaseWS } from '../../../packages/exchange-adapters/src/coinbase-ws';
 
 @WebSocketGateway({
-  cors: { origin: process.env.CORS_ORIGIN || 'http://localhost:3000', credentials: true },
-  namespace: '/stream',
+  namespace: 'stream',
+  cors: { origin: process.env.WS_CORS_ORIGIN || 'http://localhost:3000', credentials: true },
 })
 export class StreamGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer() server: Server;
+  private logger = new Logger('StreamGateway');
+  private binanceWS: BinanceWS;
+  private coinbaseWS: CoinbaseWS;
+  private clientRooms: Map<string, Set<string>> = new Map();
 
-  private priceSubscriptions: Map<string, Set<string>> = new Map(); // symbol -> client IDs
-  private isStreaming = false;
+  constructor() {
+    this.binanceWS = new BinanceWS(true);
+    this.coinbaseWS = new CoinbaseWS(true);
 
-  constructor(private exchangeService: ExchangeService) {}
+    // Forward Binance events to clients
+    this.binanceWS.on('ticker', (ticker) => {
+      this.server.to('binance:ticker').emit('ticker', { exchange: 'binance', ...ticker });
+    });
+    this.binanceWS.on('candle', (data) => {
+      this.server.to(`binance:kline:${data.symbol}`).emit('candle', { exchange: 'binance', ...data });
+    });
+    this.binanceWS.on('orderbook', (book) => {
+      this.server.to(`binance:depth:${book.symbol}`).emit('orderbook', { exchange: 'binance', ...book });
+    });
 
-  async handleConnection(client: Socket) {
-    console.log(`⚡ WebSocket client connected: ${client.id}`);
-    client.emit('connected', { message: 'TradeOS real-time stream connected' });
+    // Forward Coinbase events
+    this.coinbaseWS.on('ticker', (ticker) => {
+      this.server.to('coinbase:ticker').emit('ticker', { exchange: 'coinbase', ...ticker });
+    });
+    this.coinbaseWS.on('trade', (trade) => {
+      this.server.to('coinbase:trade').emit('trade', { exchange: 'coinbase', ...trade });
+    });
+  }
+
+  // ============ CONNECTION MANAGEMENT ============
+
+  handleConnection(client: Socket) {
+    this.logger.log(`✅ Client connected: ${client.id}`);
+    this.clientRooms.set(client.id, new Set());
   }
 
   handleDisconnect(client: Socket) {
-    console.log(`⚡ WebSocket client disconnected: ${client.id}`);
-    // Clean up subscriptions
-    for (const [symbol, clients] of this.priceSubscriptions) {
-      clients.delete(client.id);
-      if (clients.size === 0) this.priceSubscriptions.delete(symbol);
+    this.logger.log(`⚠️ Client disconnected: ${client.id}`);
+    this.clientRooms.delete(client.id);
+  }
+
+  // ============ SUBSCRIPTION MANAGEMENT ============
+
+  @SubscribeMessage('subscribe')
+  handleSubscribe(@MessageBody() data: { channel: string; symbols?: string[] }, @ConnectedSocket() client: Socket) {
+    const { channel, symbols } = data;
+    const room = symbols ? `${channel}:${symbols.join(',')}` : channel;
+
+    client.join(room);
+    this.clientRooms.get(client.id)?.add(room);
+
+    this.logger.log(`📡 Client ${client.id} subscribed to: ${room}`);
+
+    // Start Binance WS if not already connected
+    if (channel.includes('binance') && !this.binanceWS.isConnected()) {
+      const allSymbols = symbols?.map((s) => s.toUpperCase()) || ['BTCUSDT', 'ETHUSDT'];
+      const streams = ['ticker', 'kline_1m'];
+      this.binanceWS.connect(allSymbols, streams);
     }
-  }
 
-  @SubscribeMessage('subscribe prices')
-  handleSubscribePrices(@ConnectedSocket() client: Socket, @MessageBody() data: { symbols: string[] }) {
-    for (const symbol of data.symbols) {
-      if (!this.priceSubscriptions.has(symbol)) this.priceSubscriptions.set(symbol, new Set());
-      this.priceSubscriptions.get(symbol)!.add(client.id);
+    // Start Coinbase WS if needed
+    if (channel.includes('coinbase') && !this.coinbaseWS.isConnected()) {
+      const products = symbols?.map((s) => `${s}-USD`) || ['BTC-USD', 'ETH-USD'];
+      this.coinbaseWS.connect(products, ['ticker', 'matches']);
     }
-    client.emit('subscribed', { symbols: data.symbols, type: 'prices' });
-    this.startPollingIfNeeded();
+
+    client.emit('subscribed', { room, timestamp: Date.now() });
   }
 
-  @SubscribeMessage('unsubscribe prices')
-  handleUnsubscribePrices(@ConnectedSocket() client: Socket, @MessageBody() data: { symbols: string[] }) {
-    for (const symbol of data.symbols) {
-      this.priceSubscriptions.get(symbol)?.delete(client.id);
-      if (this.priceSubscriptions.get(symbol)?.size === 0) this.priceSubscriptions.delete(symbol);
-    }
+  @SubscribeMessage('unsubscribe')
+  handleUnsubscribe(@MessageBody() data: { channel: string; symbols?: string[] }, @ConnectedSocket() client: Socket) {
+    const { channel, symbols } = data;
+    const room = symbols ? `${channel}:${symbols.join(',')}` : channel;
+
+    client.leave(room);
+    this.clientRooms.get(client.id)?.delete(room);
+
+    this.logger.log(`📡 Client ${client.id} unsubscribed from: ${room}`);
+    client.emit('unsubscribed', { room });
   }
 
-  @SubscribeMessage('get cached prices')
-  handleGetCachedPrices(@ConnectedSocket() client: Socket) {
-    const manager = this.exchangeService.getManager();
-    // Return cached/simulated prices
-    const symbols = Array.from(this.priceSubscriptions.keys());
-    if (symbols.length === 0) {
-      client.emit('prices', []);
-      return;
-    }
-    // Emit current state
-    client.emit('prices', symbols.map(s => ({ symbol: s, price: 0, timestamp: Date.now() })));
+  // ============ CUSTOM EVENTS ============
+
+  @SubscribeMessage('getStreamStatus')
+  handleStreamStatus(@ConnectedSocket() client: Socket) {
+    client.emit('streamStatus', {
+      binance: { connected: this.binanceWS.isConnected(), streams: this.binanceWS.getStreamCount() },
+      coinbase: { connected: this.coinbaseWS.isConnected() },
+      clients: this.server.engine.clientsCount,
+    });
   }
 
-  private async startPollingIfNeeded() {
-    if (this.isStreaming || this.priceSubscriptions.size === 0) return;
-    this.isStreaming = true;
+  // ============ BROADCAST HELPERS ============
 
-    // Poll exchange for price updates every 2 seconds
-    const interval = setInterval(async () => {
-      if (this.priceSubscriptions.size === 0) {
-        clearInterval(interval);
-        this.isStreaming = false;
-        return;
-      }
-
-      const symbols = Array.from(this.priceSubscriptions.keys());
-      for (const symbol of symbols) {
-        try {
-          // Determine asset type from symbol
-          const assetType = this.guessAssetType(symbol);
-          const ticker = await this.exchangeService.getTicker(symbol, assetType);
-          this.server.emit('price update', {
-            symbol, price: ticker.price, bid: ticker.bid, ask: ticker.ask,
-            volume: ticker.volume24h, changePct: ticker.changePct24h, timestamp: ticker.timestamp,
-          });
-        } catch (e) {
-          // Silently skip failed symbols
-        }
-      }
-    }, 2000);
-
-    // Store interval reference for cleanup
-    (this as any)._pollInterval = interval;
+  broadcastOrderUpdate(userId: string, order: any) {
+    this.server.to(`user:${userId}`).emit('orderUpdate', order);
   }
 
-  private guessAssetType(symbol: string): string {
-    const crypto = ['BTC', 'ETH', 'SOL', 'ADA', 'DOT', 'AVAX', 'LINK', 'BNB', 'XRP', 'BTCUSDT', 'ETHUSDT'];
-    const forex = ['EURUSD', 'GBPUSD', 'USDJPY', 'EUR_USD', 'GBP_USD'];
-    const s = symbol.toUpperCase();
-    if (crypto.some(c => s.includes(c))) return 'CRYPTO';
-    if (forex.some(f => s.includes(f))) return 'FOREX';
-    return 'STOCK';
+  broadcastPortfolioUpdate(userId: string, portfolio: any) {
+    this.server.to(`user:${userId}`).emit('portfolioUpdate', portfolio);
+  }
+
+  broadcastAlert(userId: string, alert: any) {
+    this.server.to(`user:${userId}`).emit('alert', alert);
+  }
+
+  broadcastNotification(userId: string, notification: any) {
+    this.server.to(`user:${userId}`).emit('notification', notification);
+  }
+
+  // ============ HEALTH ============
+
+  getHealth() {
+    return {
+      binance: this.binanceWS.isConnected(),
+      coinbase: this.coinbaseWS.isConnected(),
+      connectedClients: this.server?.engine?.clientsCount || 0,
+    };
   }
 }
