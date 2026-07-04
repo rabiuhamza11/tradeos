@@ -1,179 +1,284 @@
 'use client';
 import { useState } from 'react';
-import { Shield, Key, Plus, Trash2, Check, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { Settings, Key, Shield, Bell, Plus, Trash2, Check, AlertTriangle, Eye, EyeOff, Server, Smartphone } from 'lucide-react';
 
-interface ApiKeyEntry {
-  id: string;
-  exchange: string;
-  label: string;
-  hasKey: boolean;
-  status: 'active' | 'inactive';
-  permissions: string[];
-}
+const EXCHANGES = [
+  { name: 'Binance', assetType: 'Crypto', connected: true, testnet: true, fields: ['API Key', 'API Secret'] },
+  { name: 'Binance Futures', assetType: 'Crypto Futures', connected: true, testnet: true, fields: ['API Key', 'API Secret'] },
+  { name: 'Coinbase', assetType: 'Crypto', connected: true, testnet: true, fields: ['API Key', 'API Secret', 'Passphrase'] },
+  { name: 'Alpaca', assetType: 'US Stocks', connected: false, testnet: true, fields: ['API Key', 'API Secret'] },
+  { name: 'OANDA', assetType: 'Forex/CFD', connected: false, testnet: true, fields: ['API Key', 'Account ID'] },
+];
 
 export default function SettingsPage() {
-  const [testnet, setTestnet] = useState(true);
-  const [keys, setKeys] = useState<ApiKeyEntry[]>([
-    { id: '1', exchange: 'Binance Spot', label: 'Main Binance', hasKey: true, status: 'active', permissions: ['Read', 'Trade', 'Withdraw'] },
-    { id: '2', exchange: 'Binance Futures', label: 'Futures Trading', hasKey: true, status: 'active', permissions: ['Read', 'Trade'] },
-    { id: '3', exchange: 'Coinbase', label: 'Coinbase Advanced', hasKey: false, status: 'inactive', permissions: [] },
-    { id: '4', exchange: 'Alpaca', label: 'Stock Trading', hasKey: false, status: 'inactive', permissions: [] },
-    { id: '5', exchange: 'OANDA', label: 'Forex Trading', hasKey: false, status: 'inactive', permissions: [] },
-  ]);
-  const [showAdd, setShowAdd] = useState(false);
-  const [newKey, setNewKey] = useState({ exchange: 'Binance Spot', apiKey: '', apiSecret: '', passphrase: '' });
-  const [showSecret, setShowSecret] = useState(false);
+  const [tab, setTab] = useState<'exchanges' | 'security' | 'notifications' | 'trading'>('exchanges');
+  const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
+  const [addingExchange, setAddingExchange] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
-  const addKey = () => {
-    if (!newKey.apiKey || !newKey.apiSecret) return;
-    setKeys((prev) => prev.map((k) =>
-      k.exchange === newKey.exchange
-        ? { ...k, hasKey: true, status: 'active', label: `${newKey.exchange} Key` }
-        : k
-    ));
-    setShowAdd(false);
-    setNewKey({ exchange: 'Binance Spot', apiKey: '', apiSecret: '', passphrase: '' });
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
-  };
+  const save = () => { setSaved(true); setTimeout(() => setSaved(false), 2000); };
 
-  const removeKey = (id: string) => {
-    setKeys((prev) => prev.map((k) => k.id === id ? { ...k, hasKey: false, status: 'inactive', permissions: [] } : k));
-  };
+  const tabs = [
+    { id: 'exchanges', label: 'Exchange API Keys', icon: Key },
+    { id: 'security', label: 'Security', icon: Shield },
+    { id: 'notifications', label: 'Notifications', icon: Bell },
+    { id: 'trading', label: 'Trading Preferences', icon: Settings },
+  ] as const;
 
   return (
     <div>
       <h1 className="text-2xl font-bold mb-1">Settings</h1>
-      <p className="text-white/40 mb-6">Manage API keys, trading environment, and security</p>
+      <p className="text-white/40 mb-6">Manage exchanges, security, and preferences</p>
 
-      {/* Trading Environment */}
-      <div className="card mb-6">
-        <h3 className="font-semibold mb-4 flex items-center gap-2"><Shield size={18} /> Trading Environment</h3>
-        <div className="flex gap-4">
-          <button onClick={() => setTestnet(true)}
-            className={`flex-1 p-4 rounded-lg border-2 transition ${testnet ? 'border-green-500 bg-green-500/10' : 'border-white/10'}`}>
-            <div className="font-semibold mb-1">📄 Paper Trading</div>
-            <div className="text-sm text-white/40">Test strategies with simulated money. No real funds at risk.</div>
-            {testnet && <div className="text-xs text-green-400 mt-2 flex items-center gap-1"><Check size={14} /> Active</div>}
-          </button>
-          <button onClick={() => setTestnet(false)}
-            className={`flex-1 p-4 rounded-lg border-2 transition ${!testnet ? 'border-red-500 bg-red-500/10' : 'border-white/10'}`}>
-            <div className="font-semibold mb-1">🔴 Live Trading</div>
-            <div className="text-sm text-white/40">Real money. Real exchanges. Real risk.</div>
-            {!testnet && <div className="text-xs text-red-400 mt-2 flex items-center gap-1"><AlertCircle size={14} /> Live — Trade with caution</div>}
-          </button>
-        </div>
+      <div className="flex gap-1 mb-6 border-b border-white/5 overflow-x-auto">
+        {tabs.map((t) => {
+          const Icon = t.icon;
+          return (
+            <button key={t.id} onClick={() => setTab(t.id)}
+              className={`px-4 py-2.5 text-sm font-medium border-b-2 transition flex items-center gap-2 whitespace-nowrap ${
+                tab === t.id ? 'border-[#00D9A3] text-white' : 'border-transparent text-white/40 hover:text-white/60'
+              }`}>
+              <Icon size={16} /> {t.label}
+            </button>
+          );
+        })}
       </div>
 
-      {/* API Keys */}
-      <div className="card mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold flex items-center gap-2"><Key size={18} /> Exchange API Keys</h3>
-          <button onClick={() => setShowAdd(true)} className="btn-primary flex items-center gap-2 text-sm">
-            <Plus size={16} /> Add Key
-          </button>
-        </div>
+      {/* Exchange API Keys */}
+      {tab === 'exchanges' && (
+        <div className="max-w-3xl space-y-4">
+          <div className="card">
+            <h3 className="font-semibold mb-4 flex items-center gap-2"><Key size={18} /> Connected Exchanges</h3>
+            <div className="space-y-3">
+              {EXCHANGES.filter(e => e.connected).map((ex) => (
+                <div key={ex.name} className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-[#00D9A3]/20 flex items-center justify-center">
+                      <Server size={18} className="text-[#00D9A3]" />
+                    </div>
+                    <div>
+                      <div className="font-medium text-sm">{ex.name}</div>
+                      <div className="text-xs text-white/40">{ex.assetType} · {ex.testnet ? 'Testnet' : 'Live'}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs px-2 py-1 rounded-full bg-green-500/20 text-green-400 flex items-center gap-1">
+                      <Check size={12} /> Connected
+                    </span>
+                    <button className="text-white/30 hover:text-red-400"><Trash2 size={16} /></button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
 
-        <div className="space-y-3">
-          {keys.map((k) => (
-            <div key={k.id} className="flex items-center justify-between p-4 bg-white/5 rounded-lg">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="font-semibold">{k.exchange}</span>
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${
-                    k.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-white/10 text-white/30'
-                  }`}>{k.status}</span>
-                </div>
-                <div className="text-xs text-white/40">
-                  {k.hasKey ? `Key: ${k.label} · ${k.permissions.join(', ')}` : 'No API key configured'}
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                {k.hasKey ? (
-                  <button onClick={() => removeKey(k.id)} className="text-red-400 hover:text-red-300">
-                    <Trash2 size={18} />
+          {/* Available Exchanges */}
+          <div className="card">
+            <h3 className="font-semibold mb-4">Available Exchanges</h3>
+            <div className="space-y-3">
+              {EXCHANGES.filter(e => !e.connected).map((ex) => (
+                <div key={ex.name} className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center">
+                      <Server size={18} className="text-white/30" />
+                    </div>
+                    <div>
+                      <div className="font-medium text-sm">{ex.name}</div>
+                      <div className="text-xs text-white/40">{ex.assetType}</div>
+                    </div>
+                  </div>
+                  <button onClick={() => setAddingExchange(ex.name)} className="text-[#00D9A3] text-sm hover:underline flex items-center gap-1">
+                    <Plus size={14} /> Connect
                   </button>
-                ) : (
-                  <button onClick={() => { setNewKey({ ...newKey, exchange: k.exchange }); setShowAdd(true); }}
-                    className="text-tradeos-accent text-sm">Connect</button>
-                )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Add Exchange Modal */}
+          {addingExchange && (
+            <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setAddingExchange(null)}>
+              <div className="card max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+                <h3 className="font-bold mb-4">Connect {addingExchange}</h3>
+                <div className="space-y-4">
+                  {EXCHANGES.find(e => e.name === addingExchange)?.fields.map((field) => (
+                    <div key={field}>
+                      <label className="text-xs text-white/40 mb-1.5 block">{field}</label>
+                      <input type={showKeys[field] ? 'text' : 'password'} className="input font-mono pr-10" placeholder={`Enter ${field}`} />
+                    </div>
+                  ))}
+                  <div>
+                    <label className="text-xs text-white/40 mb-1.5 block">Environment</label>
+                    <select className="input" defaultValue="testnet">
+                      <option value="testnet">Testnet (Paper Trading)</option>
+                      <option value="live">Live (Real Money)</option>
+                    </select>
+                  </div>
+                  <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg flex items-start gap-2">
+                    <AlertTriangle size={16} className="text-yellow-400 flex-shrink-0 mt-0.5" />
+                    <p className="text-xs text-white/60">API keys are encrypted with AES-256-GCM and stored securely. Never share your keys.</p>
+                  </div>
+                  <div className="flex gap-3">
+                    <button onClick={() => setAddingExchange(null)} className="flex-1 py-2.5 rounded-lg bg-white/5 text-white/60">Cancel</button>
+                    <button onClick={() => { setAddingExchange(null); save(); }} className="flex-1 py-2.5 rounded-lg bg-[#00D9A3] text-black font-bold">Connect</button>
+                  </div>
+                </div>
               </div>
             </div>
-          ))}
+          )}
         </div>
-      </div>
+      )}
 
-      {/* Security Settings */}
-      <div className="card mb-6">
-        <h3 className="font-semibold mb-4 flex items-center gap-2"><Shield size={18} /> Security</h3>
-        <div className="space-y-3">
-          <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
-            <div><div className="font-medium">Two-Factor Authentication</div><div className="text-xs text-white/40">Extra security for your account</div></div>
-            <span className="text-xs px-3 py-1 rounded-full bg-green-500/20 text-green-400">Enabled</span>
-          </div>
-          <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
-            <div><div className="font-medium">IP Whitelist</div><div className="text-xs text-white/40">Restrict API access to specific IPs</div></div>
-            <span className="text-xs px-3 py-1 rounded-full bg-white/10 text-white/30">Not configured</span>
-          </div>
-          <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
-            <div><div className="font-medium">Withdrawal Whitelist</div><div className="text-xs text-white/40">Only allow withdrawals to trusted addresses</div></div>
-            <span className="text-xs px-3 py-1 rounded-full bg-white/10 text-white/30">Not configured</span>
+      {/* Security */}
+      {tab === 'security' && (
+        <div className="max-w-2xl space-y-4">
+          <div className="card">
+            <h3 className="font-semibold mb-4 flex items-center gap-2"><Shield size={18} /> Security</h3>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                <div>
+                  <div className="font-medium text-sm">Two-Factor Authentication</div>
+                  <div className="text-xs text-white/40 mt-0.5">Google Authenticator</div>
+                </div>
+                <span className="text-xs px-3 py-1 rounded-full bg-green-500/20 text-green-400 flex items-center gap-1">
+                  <Check size={12} /> Enabled
+                </span>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                <div>
+                  <div className="font-medium text-sm">Change Password</div>
+                  <div className="text-xs text-white/40 mt-0.5">Last changed 45 days ago</div>
+                </div>
+                <button className="text-[#00D9A3] text-sm hover:underline">Change</button>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                <div>
+                  <div className="font-medium text-sm">Active Sessions</div>
+                  <div className="text-xs text-white/40 mt-0.5">3 devices · Lagos, NG</div>
+                </div>
+                <button className="text-red-400 text-sm hover:underline">Revoke All</button>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                <div>
+                  <div className="font-medium text-sm">IP Whitelist</div>
+                  <div className="text-xs text-white/40 mt-0.5">105.112.x.x (Lagos)</div>
+                </div>
+                <button className="text-[#00D9A3] text-sm hover:underline">Manage</button>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                <div>
+                  <div className="font-medium text-sm">API Key Encryption</div>
+                  <div className="text-xs text-white/40 mt-0.5">AES-256-GCM with PBKDF2</div>
+                </div>
+                <span className="text-xs px-3 py-1 rounded-full bg-green-500/20 text-green-400">Active</span>
+              </div>
+              <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <AlertTriangle size={18} className="text-red-400" />
+                  <span className="font-medium text-red-400 text-sm">Danger Zone</span>
+                </div>
+                <p className="text-xs text-white/40 mb-3">Delete account and all trading data. Cannot be undone.</p>
+                <button className="text-red-400 text-sm border border-red-500/30 px-4 py-2 rounded-lg hover:bg-red-500/10">Delete Account</button>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Notifications */}
-      <div className="card mb-6">
-        <h3 className="font-semibold mb-4">Notifications</h3>
-        <div className="space-y-3">
-          {['Trade Executions', 'Order Fills', 'Price Alerts', 'Daily P&L Summary', 'Risk Warnings'].map((n) => (
-            <label key={n} className="flex items-center justify-between p-3 bg-white/5 rounded-lg cursor-pointer">
-              <span className="text-sm">{n}</span>
-              <input type="checkbox" defaultChecked className="toggle" />
-            </label>
-          ))}
-        </div>
-      </div>
-
-      {saved && <div className="fixed bottom-6 right-6 bg-green-500 text-white px-4 py-2 rounded-lg flex items-center gap-2"><Check size={18} /> Settings saved</div>}
-
-      {/* Add Key Modal */}
-      {showAdd && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setShowAdd(false)}>
-          <div className="bg-tradeos-dark-2 rounded-xl p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-bold mb-4">Add API Key — {newKey.exchange}</h3>
+      {tab === 'notifications' && (
+        <div className="max-w-2xl space-y-4">
+          <div className="card">
+            <h3 className="font-semibold mb-4 flex items-center gap-2"><Bell size={18} /> Notification Preferences</h3>
             <div className="space-y-3">
+              {[
+                { label: 'Trade Executed', desc: 'When an order is filled', email: true, push: true },
+                { label: 'Price Alert Triggered', desc: 'When a price alert fires', email: false, push: true },
+                { label: 'Risk Warning', desc: 'When risk thresholds are breached', email: true, push: true },
+                { label: 'Agent Started/Stopped', desc: 'AI agent status changes', email: false, push: true },
+                { label: 'Daily Summary', desc: 'Daily P&L and trade summary', email: true, push: false },
+                { label: 'Security Alerts', desc: 'Login from new device, 2FA changes', email: true, push: true },
+              ].map((n, i) => (
+                <div key={i} className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                  <div className="flex-1">
+                    <div className="font-medium text-sm">{n.label}</div>
+                    <div className="text-xs text-white/40">{n.desc}</div>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <label className="flex items-center gap-2 text-xs text-white/40">
+                      <input type="checkbox" defaultChecked={n.email} className="rounded" /> Email
+                    </label>
+                    <label className="flex items-center gap-2 text-xs text-white/40">
+                      <input type="checkbox" defaultChecked={n.push} className="rounded" /> Push
+                    </label>
+                  </div>
+                </div>
+              ))}
+              <button onClick={save} className="btn-primary flex items-center gap-2 mt-4">
+                {saved ? <><Check size={16} /> Saved!</> : <>Save Preferences</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Trading Preferences */}
+      {tab === 'trading' && (
+        <div className="max-w-2xl space-y-4">
+          <div className="card">
+            <h3 className="font-semibold mb-4 flex items-center gap-2"><Settings size={18} /> Trading Preferences</h3>
+            <div className="space-y-4">
               <div>
-                <label className="text-xs text-white/40 mb-1 block">Exchange</label>
-                <select className="input" value={newKey.exchange} onChange={(e) => setNewKey({ ...newKey, exchange: e.target.value })}>
-                  <option>Binance Spot</option><option>Binance Futures</option><option>Coinbase</option><option>Alpaca</option><option>OANDA</option>
+                <label className="text-xs text-white/40 mb-1.5 block">Default Exchange</label>
+                <select className="input" defaultValue="Binance">
+                  <option>Binance</option><option>Coinbase</option><option>Alpaca</option><option>OANDA</option>
                 </select>
               </div>
               <div>
-                <label className="text-xs text-white/40 mb-1 block">API Key</label>
-                <input className="input" placeholder="Your API key" value={newKey.apiKey} onChange={(e) => setNewKey({ ...newKey, apiKey: e.target.value })} />
+                <label className="text-xs text-white/40 mb-1.5 block">Default Order Type</label>
+                <select className="input" defaultValue="MARKET">
+                  <option>MARKET</option><option>LIMIT</option><option>STOP</option>
+                </select>
               </div>
               <div>
-                <label className="text-xs text-white/40 mb-1 block">API Secret</label>
-                <div className="relative">
-                  <input className="input pr-10" type={showSecret ? 'text' : 'password'} placeholder="Your API secret" value={newKey.apiSecret} onChange={(e) => setNewKey({ ...newKey, apiSecret: e.target.value })} />
-                  <button onClick={() => setShowSecret(!showSecret)} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40">
-                    {showSecret ? <EyeOff size={18} /> : <Eye size={18} />}
-                  </button>
-                </div>
+                <label className="text-xs text-white/40 mb-1.5 block">Default Time-in-Force</label>
+                <select className="input" defaultValue="GTC">
+                  <option>GTC</option><option>IOC</option><option>FOK</option>
+                </select>
               </div>
-              {(newKey.exchange === 'Coinbase') && (
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs text-white/40 mb-1 block">Passphrase (Coinbase only)</label>
-                  <input className="input" placeholder="Passphrase" value={newKey.passphrase} onChange={(e) => setNewKey({ ...newKey, passphrase: e.target.value })} />
+                  <label className="text-xs text-white/40 mb-1.5 block">Max Position Size ($)</label>
+                  <input type="number" className="input" defaultValue={50000} />
                 </div>
-              )}
-              <div className="p-3 bg-amber-500/10 rounded-lg text-xs text-amber-400 flex items-start gap-2">
-                <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
-                <span>Keys are encrypted at rest and never sent to the frontend. We recommend restricting API key permissions to Read + Trade only.</span>
+                <div>
+                  <label className="text-xs text-white/40 mb-1.5 block">Max Daily Loss ($)</label>
+                  <input type="number" className="input" defaultValue={5000} />
+                </div>
               </div>
-              <button onClick={addKey} className="btn-primary w-full">Save API Key</button>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs text-white/40 mb-1.5 block">Max Open Positions</label>
+                  <input type="number" className="input" defaultValue={20} />
+                </div>
+                <div>
+                  <label className="text-xs text-white/40 mb-1.5 block">Max Portfolio Exposure (%)</label>
+                  <input type="number" className="input" defaultValue={80} />
+                </div>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                <div>
+                  <div className="font-medium text-sm">Trading Mode</div>
+                  <div className="text-xs text-white/40 mt-0.5">Paper or Live trading</div>
+                </div>
+                <div className="flex gap-2">
+                  <span className="text-xs px-3 py-1 rounded-full bg-yellow-500/20 text-yellow-400">Paper (Active)</span>
+                  <button className="text-xs px-3 py-1 rounded-full bg-white/5 text-white/40 hover:text-white">Switch to Live</button>
+                </div>
+              </div>
+              <button onClick={save} className="btn-primary flex items-center gap-2">
+                {saved ? <><Check size={16} /> Saved!</> : <>Save Preferences</>}
+              </button>
             </div>
           </div>
         </div>
