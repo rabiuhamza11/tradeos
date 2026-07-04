@@ -1,0 +1,449 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/@prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============ USERS & AUTH ============
+
+model User {
+  id              String   @id @default(uuid())
+  email           String   @unique
+  passwordHash    String?
+  name            String?
+  avatarUrl       String?
+  emailVerified   Boolean  @default(false)
+  emailVerifyToken String? @unique
+  passwordResetToken String? @unique
+  passwordResetExpires DateTime?
+  oauthProvider   String?
+  oauthId         String?
+  role            UserRole @default(TRADER)
+  twoFactorEnabled Boolean @default(false)
+  twoFactorSecret  String?
+  kycStatus       KycStatus @default(PENDING)
+  kycData         Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  portfolios      Portfolio[]
+  orders          Order[]
+  watchlists      Watchlist[]
+  trades          Trade[]
+  positions       Position[]
+  apiKeys         ApiKey[]
+  alerts          Alert[]
+  strategies      Strategy[]
+  auditLogs       AuditLog[]
+  refreshTokens   RefreshToken[]
+  notifications   Notification[]
+  conversations   Conversation[]
+
+  @@index([email])
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  TRADER
+  ANALYST
+  VIEWER
+}
+
+enum KycStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  EXPIRED
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+}
+
+// ============ PORTFOLIOS ============
+
+model Portfolio {
+  id          String   @id @default(uuid())
+  userId      String
+  name        String
+  description String?
+  totalValue  Decimal  @db.Decimal(18, 2)
+  cashBalance Decimal  @db.Decimal(18, 2)
+  currency    String   @default("USD")
+  isPublic    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  positions   Position[]
+  trades      Trade[]
+  allocations Allocation[]
+
+  @@index([userId])
+}
+
+model Allocation {
+  id           String   @id @default(uuid())
+  portfolioId  String
+  assetSymbol  String
+  assetName    String
+  assetType    AssetType
+  percentage   Decimal  @db.Decimal(5, 2)
+  amount       Decimal  @db.Decimal(18, 2)
+  createdAt    DateTime @default(now())
+
+  portfolio    Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  @@index([portfolioId])
+  @@index([assetSymbol])
+}
+
+enum AssetType {
+  STOCK
+  CRYPTO
+  FOREX
+  COMMODITY
+  ETF
+  BOND
+  OPTION
+  FUTURE
+}
+
+// ============ POSITIONS ============
+
+model Position {
+  id            String   @id @default(uuid())
+  userId        String
+  portfolioId   String
+  symbol        String
+  name          String
+  assetType     AssetType
+  quantity      Decimal  @db.Decimal(18, 8)
+  avgEntryPrice Decimal  @db.Decimal(18, 8)
+  currentPrice  Decimal  @db.Decimal(18, 8)
+  marketValue   Decimal  @db.Decimal(18, 2)
+  unrealizedPnL Decimal  @db.Decimal(18, 2)
+  realizedPnL   Decimal  @db.Decimal(18, 2)
+  side          PositionSide @default(LONG)
+  status        PositionStatus @default(OPEN)
+  stopLoss      Decimal? @db.Decimal(18, 8)
+  takeProfit    Decimal? @db.Decimal(18, 8)
+  openedAt      DateTime @default(now())
+  closedAt      DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  portfolio     Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  trades        Trade[]
+
+  @@index([userId])
+  @@index([portfolioId])
+  @@index([symbol])
+  @@index([status])
+}
+
+enum PositionSide {
+  LONG
+  SHORT
+}
+
+enum PositionStatus {
+  OPEN
+  CLOSED
+  PENDING_CLOSE
+}
+
+// ============ ORDERS ============
+
+model Order {
+  id              String      @id @default(uuid())
+  userId          String
+  portfolioId     String?
+  symbol          String
+  assetType       AssetType
+  side            OrderSide
+  type            OrderType
+  status          OrderStatus @default(PENDING)
+  quantity        Decimal     @db.Decimal(18, 8)
+  filledQuantity  Decimal     @db.Decimal(18, 8) @default(0)
+  price           Decimal?    @db.Decimal(18, 8)
+  stopPrice       Decimal?    @db.Decimal(18, 8)
+  timeInForce     TimeInForce @default(GTC)
+  exchange        String?
+  strategy        String?
+  isAutomated     Boolean     @default(false)
+  agentId         String?
+  notes           String?
+  error           String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  executedAt      DateTime?
+
+  user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trades          Trade[]
+
+  @@index([userId])
+  @@index([symbol])
+  @@index([status])
+  @@index([createdAt])
+}
+
+enum OrderSide {
+  BUY
+  SELL
+}
+
+enum OrderType {
+  MARKET
+  LIMIT
+  STOP
+  STOP_LIMIT
+  TRAILING_STOP
+  BRACKET
+}
+
+enum OrderStatus {
+  PENDING
+  QUEUED
+  PARTIALLY_FILLED
+  FILLED
+  CANCELLED
+  REJECTED
+  EXPIRED
+}
+
+enum TimeInForce {
+  GTC
+  IOC
+  FOK
+  DAY
+  GTT
+}
+
+// ============ TRADES (EXECUTED) ============
+
+model Trade {
+  id           String   @id @default(uuid())
+  userId       String
+  portfolioId  String
+  positionId   String?
+  orderId      String?
+  symbol       String
+  assetType    AssetType
+  side         OrderSide
+  quantity     Decimal  @db.Decimal(18, 8)
+  price        Decimal  @db.Decimal(18, 8)
+  value        Decimal  @db.Decimal(18, 2)
+  fee          Decimal  @db.Decimal(18, 2) @default(0)
+  feeCurrency  String   @default("USD")
+  exchange     String?
+  executedAt   DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  portfolio    Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  position     Position? @relation(fields: [positionId], references: [id], onDelete: SetNull)
+  order        Order?    @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([portfolioId])
+  @@index([symbol])
+  @@index([executedAt])
+}
+
+// ============ WATCHLIST ============
+
+model Watchlist {
+  id     String   @id @default(uuid())
+  userId String
+  name   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items  WatchlistItem[]
+
+  @@index([userId])
+}
+
+model WatchlistItem {
+  id           String   @id @default(uuid())
+  watchlistId  String
+  symbol       String
+  assetType    AssetType
+  addedAt      DateTime @default(now())
+
+  watchlist    Watchlist @relation(fields: [watchlistId], references: [id], onDelete: Cascade)
+  @@index([watchlistId])
+}
+
+// ============ ALERTS ============
+
+model Alert {
+  id          String   @id @default(uuid())
+  userId      String
+  symbol      String
+  type        AlertType
+  condition   String   // e.g., "price_above", "rsi_below"
+  value       Decimal  @db.Decimal(18, 8)
+  message     String?
+  isActive    Boolean  @default(true)
+  triggeredAt DateTime?
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+  @@index([symbol])
+}
+
+enum AlertType {
+  PRICE_ABOVE
+  PRICE_BELOW
+  VOLUME_SPIKE
+  RSI_OVERBOUGHT
+  RSI_OVERSOLD
+  MOVING_AVERAGE_CROSS
+  NEWS_TRIGGER
+  PNL_THRESHOLD
+}
+
+// ============ AI STRATEGIES ============
+
+model Strategy {
+  id          String   @id @default(uuid())
+  userId      String
+  name        String
+  description String?
+  type        StrategyType
+  config      Json?
+  status      StrategyStatus @default(INACTIVE)
+  performance Json?
+  backtestResults Json?
+  isAutomated Boolean  @default(false)
+  riskLevel   String   @default("MEDIUM")
+  maxPositions Int     @default(5)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+  @@index([status])
+}
+
+enum StrategyType {
+  TREND_FOLLOWING
+  MEAN_REVERSION
+  MOMENTUM
+  ARBITRAGE
+  SCALPING
+  SWING
+  AI_PREDICTION
+  SENTIMENT_BASED
+  PORTFOLIO_REBALANCE
+}
+
+enum StrategyStatus {
+  ACTIVE
+  INACTIVE
+  BACKTESTING
+  PAUSED
+  ERROR
+}
+
+// ============ CONVERSATIONS (AI CHAT) ============
+
+model Conversation {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String?
+  context   Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  Message[]
+  @@index([userId])
+}
+
+model Message {
+  id              String    @id @default(uuid())
+  conversationId  String
+  role            String    // user, assistant, system, agent
+  content         String
+  agentType       String?
+  metadata        Json?
+  tokens          Int?
+  createdAt       DateTime  @default(now())
+
+  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  @@index([conversationId])
+}
+
+// ============ API KEYS (EXCHANGE INTEGRATION) ============
+
+model ApiKey {
+  id          String   @id @default(uuid())
+  userId      String
+  name        String
+  exchange    String   // binance, coinbase, alpaca, interactive_brokers
+  keyHash     String   @unique
+  keyPrefix   String
+  secretHash  String
+  permissions String[] @default([])
+  isActive    Boolean  @default(true)
+  lastUsedAt  DateTime?
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+  @@index([exchange])
+}
+
+// ============ NOTIFICATIONS ============
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  type      String   // price_alert, order_filled, trade_closed, news
+  title     String
+  body      String
+  data      Json?
+  isRead    Boolean  @default(false)
+  channel   String   @default("in_app") // in_app, push, email, sms, whatsapp, telegram
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+  @@index([isRead])
+}
+
+// ============ AUDIT LOG ============
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  userId      String?
+  action      String
+  resource    String?
+  ipAddress   String?
+  userAgent   String?
+  metadata    Json?
+  severity    String   @default("INFO") // INFO, WARN, ERROR, CRITICAL
+  createdAt   DateTime @default(now())
+
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}

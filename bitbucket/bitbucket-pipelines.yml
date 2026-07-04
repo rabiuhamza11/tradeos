@@ -1,0 +1,49 @@
+# Bitbucket Pipelines for TradeOS
+image: node:20
+
+pipelines:
+  default:
+    - step:
+        name: Test
+        services: [postgres]
+        script:
+          - npm ci
+          - npx prisma generate
+          - npx prisma migrate dev --name init
+          - npm test
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/tradeos_test
+          JWT_SECRET: test-secret
+
+  branches:
+    main:
+      - step:
+          name: Build
+          script:
+            - npm ci
+            - npm run build
+          artifacts:
+            - apps/api/dist/**
+            - apps/web/.next/**
+
+      - step:
+          name: Deploy Web (Vercel)
+          deployment: production
+          script:
+            - npm i -g vercel
+            - cd apps/web && vercel --prod --token $VERCEL_TOKEN
+
+      - step:
+          name: Deploy API (Render)
+          deployment: production
+          script:
+            - curl -X POST $RENDER_DEPLOY_HOOK
+
+definitions:
+  services:
+    postgres:
+      image: postgres:16
+      variables:
+        POSTGRES_USER: test
+        POSTGRES_PASSWORD: test
+        POSTGRES_DB: tradeos_test

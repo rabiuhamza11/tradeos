@@ -1,0 +1,24 @@
+{
+  "name": "tradeos",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "test": "turbo test",
+    "lint": "turbo lint",
+    "db:migrate": "cd prisma && npx prisma migrate dev",
+    "db:generate": "cd prisma && npx prisma generate",
+    "db:seed": "cd prisma && npx prisma db seed",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "k8s:apply": "kubectl apply -f kubernetes/"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0",
+    "typescript": "^5.4.0",
+    "prisma": "^5.10.0"
+  },
+  "packageManager": "npm@10.0.0"
+}

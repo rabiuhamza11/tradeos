@@ -1,0 +1,32 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "lib": ["ES2022", "DOM"],
+    "declaration": true,
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "baseUrl": ".",
+    "paths": {
+      "@tradeos/ai-engine": ["packages/ai-engine/src"],
+      "@tradeos/agent-sdk": ["packages/agent-sdk/src"],
+      "@tradeos/trading-engine": ["packages/trading-engine/src"],
+      "@tradeos/analytics": ["packages/analytics/src"],
+      "@tradeos/blockchain": ["packages/blockchain/src"],
+      "@tradeos/cybersecurity": ["packages/cybersecurity/src"],
+      "@tradeos/voice": ["packages/voice/src"],
+      "@tradeos/video": ["packages/video/src"],
+      "@tradeos/automation": ["packages/automation/src"],
+      "@tradeos/notifications": ["packages/notifications/src"],
+      "@tradeos/shared": ["packages/shared/src"]
+    }
+  },
+  "exclude": ["node_modules", "dist", ".next", "build"]
+}

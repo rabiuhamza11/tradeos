@@ -1,0 +1,67 @@
+# GitLab CI/CD for TradeOS
+stages:
+  - test
+  - build
+  - deploy
+
+variables:
+  POSTGRES_HOST: postgres
+  POSTGRES_USER: test
+  POSTGRES_PASSWORD: test
+  POSTGRES_DB: tradeos_test
+  DATABASE_URL: postgresql://test:test@postgres:5432/tradeos_test
+
+test:
+  stage: test
+  image: node:20-alpine
+  services:
+    - postgres:16
+  script:
+    - npm ci
+    - npx prisma generate
+    - npx prisma migrate dev --name init
+    - npm test
+  environment: testing
+
+build:
+  stage: build
+  image: node:20-alpine
+  script:
+    - npm ci
+    - npm run build
+  artifacts:
+    paths:
+      - apps/api/dist/
+      - apps/web/.next/
+  only:
+    - main
+
+deploy:vercel:
+  stage: deploy
+  image: node:20-alpine
+  script:
+    - npm i -g vercel
+    - cd apps/web && vercel --prod --token $VERCEL_TOKEN
+  only:
+    - main
+
+deploy:render:
+  stage: deploy
+  image: curlimages/curl
+  script:
+    - curl -X POST $RENDER_DEPLOY_HOOK
+  only:
+    - main
+
+deploy:docker:
+  stage: deploy
+  image: docker:24
+  services: [docker:24-dind]
+  script:
+    - docker build -f docker/Dockerfile -t $DOCKER_USER/tradeos-api:latest .
+    - docker build -f docker/Dockerfile.web -t $DOCKER_USER/tradeos-web:latest .
+    - echo $DOCKER_PASSWORD | docker login -u $DOCKER_USER --password-stdin
+    - docker push $DOCKER_USER/tradeos-api:latest
+    - docker push $DOCKER_USER/tradeos-web:latest
+  only:
+    - main
