@@ -1,23 +1,62 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalDependencies": [".env"],
+  "globalDependencies": ["**/.env"],
   "pipeline": {
     "build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**", ".next/**", "build/**"],
-      "env": ["DATABASE_URL", "JWT_SECRET", "NEXT_PUBLIC_API_URL"]
+      "env": [
+        "DATABASE_URL",
+        "REDIS_URL",
+        "JWT_SECRET",
+        "BINANCE_API_KEY",
+        "BINANCE_API_SECRET",
+        "BINANCE_FUTURES_API_KEY",
+        "BINANCE_FUTURES_API_SECRET",
+        "COINBASE_API_KEY",
+        "COINBASE_API_SECRET",
+        "COINBASE_PASSPHRASE",
+        "ALPACA_API_KEY",
+        "ALPACA_API_SECRET",
+        "OANDA_API_KEY",
+        "OANDA_ACCOUNT_ID",
+        "OPENAI_API_KEY",
+        "EXCHANGE_TESTNET",
+        "PORT",
+        "CORS_ORIGIN",
+        "WS_PORT",
+        "WS_CORS_ORIGIN"
+      ]
     },
     "dev": {
       "cache": false,
       "persistent": true
     },
-    "test": {
-      "dependsOn": ["build"],
-      "outputs": ["coverage/**"],
-      "inputs": ["src/**/*.ts", "src/**/*.tsx", "test/**/*.ts"]
-    },
     "lint": {
       "outputs": []
+    },
+    "test": {
+      "outputs": ["coverage/**"],
+      "dependsOn": ["^build"]
+    },
+    "db:generate": {
+      "outputs": ["node_modules/@prisma/client/**"],
+      "cache": false
+    },
+    "db:push": {
+      "cache": false,
+      "persistent": false
+    },
+    "db:seed": {
+      "cache": false,
+      "persistent": false
+    },
+    "db:migrate": {
+      "cache": false,
+      "persistent": false
+    },
+    "clean": {
+      "cache": false
     }
   }
 }

@@ -1,6 +1,8 @@
+// TradeOS Prisma Schema — Complete
+// Full database schema for the enterprise trading platform
+
 generator client {
   provider = "prisma-client-js"
-  output   = "../node_modules/@prisma/client"
 }
 
 datasource db {
@@ -8,150 +10,153 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ============ USERS & AUTH ============
+// ============ AUTH & USERS ============
 
 model User {
-  id              String   @id @default(uuid())
-  email           String   @unique
-  passwordHash    String?
-  name            String?
-  avatarUrl       String?
-  emailVerified   Boolean  @default(false)
-  emailVerifyToken String? @unique
-  passwordResetToken String? @unique
-  passwordResetExpires DateTime?
-  oauthProvider   String?
-  oauthId         String?
-  role            UserRole @default(TRADER)
-  twoFactorEnabled Boolean @default(false)
+  id               String       @id @default(cuid())
+  email            String       @unique
+  password         String
+  firstName        String
+  lastName         String
+  twoFactorEnabled Boolean      @default(false)
   twoFactorSecret  String?
-  kycStatus       KycStatus @default(PENDING)
-  kycData         Json?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  avatar           String?
+  role             UserRole     @default(TRADER)
+  status           UserStatus   @default(ACTIVE)
+  lastLogin        DateTime?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
 
-  portfolios      Portfolio[]
-  orders          Order[]
-  watchlists      Watchlist[]
-  trades          Trade[]
-  positions       Position[]
-  apiKeys         ApiKey[]
-  alerts          Alert[]
-  strategies      Strategy[]
-  auditLogs       AuditLog[]
-  refreshTokens   RefreshToken[]
-  notifications   Notification[]
-  conversations   Conversation[]
+  organizations    OrgMember[]
+  portfolios       Portfolio[]
+  trades           Trade[]
+  orders           Order[]
+  watchlists       Watchlist[]
+  agents           AIAgent[]
+  notifications    Notification[]
+  apiKeys          ExchangeCredential[]
+  sessions         Session[]
+}
 
-  @@index([email])
+model Organization {
+  id          String       @id @default(cuid())
+  name        String       @unique
+  description String?
+  plan        OrgPlan      @default(FREE)
+  status      OrgStatus    @default(ACTIVE)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  ownerId     String
+  owner       User         @relation(fields: [ownerId], references: [id])
+
+  members     OrgMember[]
+  portfolios  Portfolio[]
+  agents      AIAgent[]
+  deployments Deployment[]
+}
+
+model OrgMember {
+  id         String       @id @default(cuid())
+  orgId      String
+  userId     String
+  role       OrgRole      @default(DEVELOPER)
+  joinedAt   DateTime     @default(now())
+
+  org        Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, userId])
 }
 
 enum UserRole {
-  SUPER_ADMIN
   ADMIN
   TRADER
-  ANALYST
   VIEWER
 }
 
-enum KycStatus {
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
   PENDING
-  VERIFIED
-  REJECTED
-  EXPIRED
 }
 
-model RefreshToken {
-  id        String   @id @default(uuid())
-  token     String   @unique
-  userId    String
-  expiresAt DateTime
-  revoked   Boolean  @default(false)
-  createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  @@index([userId])
+enum OrgPlan {
+  FREE
+  PRO
+  ENTERPRISE
 }
 
-// ============ PORTFOLIOS ============
+enum OrgStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum OrgRole {
+  OWNER
+  ADMIN
+  DEVELOPER
+  VIEWER
+}
+
+// ============ PORTFOLIOS & POSITIONS ============
 
 model Portfolio {
-  id          String   @id @default(uuid())
-  userId      String
-  name        String
-  description String?
-  totalValue  Decimal  @db.Decimal(18, 2)
-  cashBalance Decimal  @db.Decimal(18, 2)
-  currency    String   @default("USD")
-  isPublic    Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id             String       @id @default(cuid())
+  name           String
+  description    String?
+  initialCapital Float
+  currentValue   Float        @default(0)
+  currency       String       @default("USD")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  positions   Position[]
-  trades      Trade[]
-  allocations Allocation[]
+  ownerId        String
+  owner          User         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  orgId          String?
+  org            Organization? @relation(fields: [orgId], references: [id])
 
-  @@index([userId])
+  positions      Position[]
+  trades         Trade[]
+  orders         Order[]
+  balances       Balance[]
 }
-
-model Allocation {
-  id           String   @id @default(uuid())
-  portfolioId  String
-  assetSymbol  String
-  assetName    String
-  assetType    AssetType
-  percentage   Decimal  @db.Decimal(5, 2)
-  amount       Decimal  @db.Decimal(18, 2)
-  createdAt    DateTime @default(now())
-
-  portfolio    Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
-  @@index([portfolioId])
-  @@index([assetSymbol])
-}
-
-enum AssetType {
-  STOCK
-  CRYPTO
-  FOREX
-  COMMODITY
-  ETF
-  BOND
-  OPTION
-  FUTURE
-}
-
-// ============ POSITIONS ============
 
 model Position {
-  id            String   @id @default(uuid())
-  userId        String
-  portfolioId   String
-  symbol        String
-  name          String
-  assetType     AssetType
-  quantity      Decimal  @db.Decimal(18, 8)
-  avgEntryPrice Decimal  @db.Decimal(18, 8)
-  currentPrice  Decimal  @db.Decimal(18, 8)
-  marketValue   Decimal  @db.Decimal(18, 2)
-  unrealizedPnL Decimal  @db.Decimal(18, 2)
-  realizedPnL   Decimal  @db.Decimal(18, 2)
-  side          PositionSide @default(LONG)
-  status        PositionStatus @default(OPEN)
-  stopLoss      Decimal? @db.Decimal(18, 8)
-  takeProfit    Decimal? @db.Decimal(18, 8)
-  openedAt      DateTime @default(now())
-  closedAt      DateTime?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id           String       @id @default(cuid())
+  symbol       String
+  exchange     String
+  side         PositionSide
+  quantity     Float
+  entryPrice   Float
+  currentPrice Float
+  pnl          Float        @default(0)
+  pnlPct       Float        @default(0)
+  status       PositionStatus @default(OPEN)
+  openedAt     DateTime     @default(now())
+  closedAt     DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  portfolio     Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
-  trades        Trade[]
+  portfolioId  String
+  portfolio    Portfolio    @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
 
-  @@index([userId])
   @@index([portfolioId])
   @@index([symbol])
-  @@index([status])
+}
+
+model Balance {
+  id           String       @id @default(cuid())
+  asset        String
+  free         Float        @default(0)
+  locked       Float        @default(0)
+  exchange     String
+  updatedAt    DateTime     @updatedAt
+
+  portfolioId  String
+  portfolio    Portfolio    @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+
+  @@unique([portfolioId, asset, exchange])
 }
 
 enum PositionSide {
@@ -162,47 +167,76 @@ enum PositionSide {
 enum PositionStatus {
   OPEN
   CLOSED
-  PENDING_CLOSE
+  LIQUIDATED
 }
 
-// ============ ORDERS ============
+// ============ TRADES & ORDERS ============
 
-model Order {
-  id              String      @id @default(uuid())
-  userId          String
-  portfolioId     String?
-  symbol          String
-  assetType       AssetType
-  side            OrderSide
-  type            OrderType
-  status          OrderStatus @default(PENDING)
-  quantity        Decimal     @db.Decimal(18, 8)
-  filledQuantity  Decimal     @db.Decimal(18, 8) @default(0)
-  price           Decimal?    @db.Decimal(18, 8)
-  stopPrice       Decimal?    @db.Decimal(18, 8)
-  timeInForce     TimeInForce @default(GTC)
-  exchange        String?
-  strategy        String?
-  isAutomated     Boolean     @default(false)
-  agentId         String?
-  notes           String?
-  error           String?
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-  executedAt      DateTime?
+model Trade {
+  id           String       @id @default(cuid())
+  symbol       String
+  exchange     String
+  side         TradeSide
+  quantity     Float
+  entryPrice   Float
+  exitPrice    Float?
+  pnl          Float        @default(0)
+  pnlPct       Float        @default(0)
+  status       TradeStatus  @default(OPEN)
+  fee          Float        @default(0)
+  strategy     String?
+  executedAt   DateTime     @default(now())
+  closedAt     DateTime?
+  createdAt    DateTime     @default(now())
 
-  user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  trades          Trade[]
+  userId       String
+  user         User         @relation(fields: [userId], references: [id])
+  portfolioId  String
+  portfolio    Portfolio    @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([portfolioId])
   @@index([symbol])
-  @@index([status])
-  @@index([createdAt])
 }
 
-enum OrderSide {
+model Order {
+  id              String       @id @default(cuid())
+  exchangeOrderId String?
+  symbol          String
+  exchange        String
+  side            TradeSide
+  type            OrderType
+  quantity        Float
+  price           Float?
+  stopPrice       Float?
+  filledQty       Float        @default(0)
+  avgFillPrice    Float?
+  status          OrderStatus  @default(PENDING)
+  timeInForce     TimeInForce  @default(GTC)
+  fee             Float        @default(0)
+  errorMessage    String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  userId          String
+  user            User         @relation(fields: [userId], references: [id])
+  portfolioId     String
+  portfolio       Portfolio    @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([portfolioId])
+  @@index([status])
+}
+
+enum TradeSide {
   BUY
   SELL
+}
+
+enum TradeStatus {
+  OPEN
+  CLOSED
+  CANCELLED
 }
 
 enum OrderType {
@@ -211,239 +245,180 @@ enum OrderType {
   STOP
   STOP_LIMIT
   TRAILING_STOP
-  BRACKET
 }
 
 enum OrderStatus {
   PENDING
-  QUEUED
-  PARTIALLY_FILLED
+  SUBMITTED
+  PARTIAL
   FILLED
   CANCELLED
   REJECTED
-  EXPIRED
 }
 
 enum TimeInForce {
   GTC
   IOC
   FOK
-  DAY
-  GTT
-}
-
-// ============ TRADES (EXECUTED) ============
-
-model Trade {
-  id           String   @id @default(uuid())
-  userId       String
-  portfolioId  String
-  positionId   String?
-  orderId      String?
-  symbol       String
-  assetType    AssetType
-  side         OrderSide
-  quantity     Decimal  @db.Decimal(18, 8)
-  price        Decimal  @db.Decimal(18, 8)
-  value        Decimal  @db.Decimal(18, 2)
-  fee          Decimal  @db.Decimal(18, 2) @default(0)
-  feeCurrency  String   @default("USD")
-  exchange     String?
-  executedAt   DateTime @default(now())
-  createdAt    DateTime @default(now())
-
-  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  portfolio    Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
-  position     Position? @relation(fields: [positionId], references: [id], onDelete: SetNull)
-  order        Order?    @relation(fields: [orderId], references: [id], onDelete: SetNull)
-
-  @@index([userId])
-  @@index([portfolioId])
-  @@index([symbol])
-  @@index([executedAt])
+  GTD
 }
 
 // ============ WATCHLIST ============
 
 model Watchlist {
-  id     String   @id @default(uuid())
-  userId String
-  name   String
+  id        String   @id @default(cuid())
+  name      String
+  ownerId   String
+  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  items     WatchlistItem[]
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  user   User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  items  WatchlistItem[]
-
-  @@index([userId])
 }
 
 model WatchlistItem {
-  id           String   @id @default(uuid())
-  watchlistId  String
+  id           String   @id @default(cuid())
   symbol       String
-  assetType    AssetType
-  addedAt      DateTime @default(now())
-
+  exchange     String
+  sortOrder    Int      @default(0)
+  alertAbove   Float?
+  alertBelow   Float?
+  watchlistId  String
   watchlist    Watchlist @relation(fields: [watchlistId], references: [id], onDelete: Cascade)
+
   @@index([watchlistId])
 }
 
-// ============ ALERTS ============
+// ============ AI AGENTS ============
 
-model Alert {
-  id          String   @id @default(uuid())
-  userId      String
-  symbol      String
-  type        AlertType
-  condition   String   // e.g., "price_above", "rsi_below"
-  value       Decimal  @db.Decimal(18, 8)
-  message     String?
-  isActive    Boolean  @default(true)
-  triggeredAt DateTime?
-  createdAt   DateTime @default(now())
-
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  @@index([userId])
-  @@index([symbol])
-}
-
-enum AlertType {
-  PRICE_ABOVE
-  PRICE_BELOW
-  VOLUME_SPIKE
-  RSI_OVERBOUGHT
-  RSI_OVERSOLD
-  MOVING_AVERAGE_CROSS
-  NEWS_TRIGGER
-  PNL_THRESHOLD
-}
-
-// ============ AI STRATEGIES ============
-
-model Strategy {
-  id          String   @id @default(uuid())
-  userId      String
+model AIAgent {
+  id          String       @id @default(cuid())
   name        String
-  description String?
-  type        StrategyType
+  type        AgentType
+  description String
+  strategy    String
+  riskLevel   RiskLevel    @default(MEDIUM)
+  isActive    Boolean      @default(false)
   config      Json?
-  status      StrategyStatus @default(INACTIVE)
   performance Json?
-  backtestResults Json?
-  isAutomated Boolean  @default(false)
-  riskLevel   String   @default("MEDIUM")
-  maxPositions Int     @default(5)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  @@index([userId])
-  @@index([status])
+  ownerId     String
+  owner       User         @relation(fields: [ownerId], references: [id])
+  orgId       String?
+  org         Organization? @relation(fields: [orgId], references: [id])
+  executions  AgentExecution[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 }
 
-enum StrategyType {
-  TREND_FOLLOWING
-  MEAN_REVERSION
-  MOMENTUM
-  ARBITRAGE
-  SCALPING
+model AgentExecution {
+  id            String   @id @default(cuid())
+  agentId       String
+  agent         AIAgent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  signals       Json?
+  tradesExecuted Int     @default(0)
+  pnl           Float    @default(0)
+  startedAt     DateTime @default(now())
+  completedAt   DateTime?
+  duration      Int?
+}
+
+enum AgentType {
+  SCALPER
   SWING
-  AI_PREDICTION
-  SENTIMENT_BASED
-  PORTFOLIO_REBALANCE
+  ARBITRAGE
+  RISK_MANAGER
+  SENTIMENT
+  REBALANCER
 }
 
-enum StrategyStatus {
-  ACTIVE
-  INACTIVE
-  BACKTESTING
-  PAUSED
-  ERROR
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
 }
 
-// ============ CONVERSATIONS (AI CHAT) ============
+// ============ CREDENTIALS & SECURITY ============
 
-model Conversation {
-  id        String   @id @default(uuid())
-  userId    String
-  title     String?
-  context   Json?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+model ExchangeCredential {
+  id           String   @id @default(cuid())
+  exchange     String
+  label        String
+  apiKey       String   // Encrypted
+  apiSecret    String   // Encrypted
+  passphrase   String?  // Encrypted (Coinbase)
+  accountId    String?  // OANDA
+  permissions  String[]
+  isActive     Boolean  @default(true)
+  testnet      Boolean  @default(true)
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  messages  Message[]
-  @@index([userId])
+  @@unique([userId, exchange])
 }
 
-model Message {
-  id              String    @id @default(uuid())
-  conversationId  String
-  role            String    // user, assistant, system, agent
-  content         String
-  agentType       String?
-  metadata        Json?
-  tokens          Int?
-  createdAt       DateTime  @default(now())
-
-  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  @@index([conversationId])
-}
-
-// ============ API KEYS (EXCHANGE INTEGRATION) ============
-
-model ApiKey {
-  id          String   @id @default(uuid())
-  userId      String
-  name        String
-  exchange    String   // binance, coinbase, alpaca, interactive_brokers
-  keyHash     String   @unique
-  keyPrefix   String
-  secretHash  String
-  permissions String[] @default([])
-  isActive    Boolean  @default(true)
-  lastUsedAt  DateTime?
-  createdAt   DateTime @default(now())
-
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  @@index([userId])
-  @@index([exchange])
+model Session {
+  id              String   @id @default(cuid())
+  token           String   @unique
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ipAddress       String?
+  userAgent       String?
+  twoFactorVerified Boolean @default(false)
+  expiresAt       DateTime
+  createdAt       DateTime @default(now())
 }
 
 // ============ NOTIFICATIONS ============
 
 model Notification {
-  id        String   @id @default(uuid())
-  userId    String
-  type      String   // price_alert, order_filled, trade_closed, news
+  id        String              @id @default(cuid())
+  type      NotificationType
   title     String
-  body      String
+  message   String
+  priority  NotificationPriority @default(NORMAL)
   data      Json?
-  isRead    Boolean  @default(false)
-  channel   String   @default("in_app") // in_app, push, email, sms, whatsapp, telegram
-  createdAt DateTime @default(now())
-
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  @@index([userId])
-  @@index([isRead])
+  read      Boolean             @default(false)
+  userId    String
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime            @default(now())
 }
 
-// ============ AUDIT LOG ============
+enum NotificationType {
+  TRADE
+  ALERT
+  RISK
+  SYSTEM
+  AGENT
+  DEPOSIT
+  WITHDRAWAL
+}
 
-model AuditLog {
-  id          String   @id @default(uuid())
-  userId      String?
-  action      String
-  resource    String?
-  ipAddress   String?
-  userAgent   String?
-  metadata    Json?
-  severity    String   @default("INFO") // INFO, WARN, ERROR, CRITICAL
-  createdAt   DateTime @default(now())
+enum NotificationPriority {
+  LOW
+  NORMAL
+  HIGH
+  CRITICAL
+}
 
-  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  @@index([userId])
-  @@index([action])
-  @@index([createdAt])
+// ============ DEPLOYMENTS ============
+
+model Deployment {
+  id           String   @id @default(cuid())
+  environment  String
+  platform     String
+  url          String?
+  status       DeploymentStatus @default(PENDING)
+  version      String
+  logs         String?
+  orgId        String?
+  org          Organization? @relation(fields: [orgId], references: [id])
+  deployedAt   DateTime @default(now())
+}
+
+enum DeploymentStatus {
+  PENDING
+  BUILDING
+  SUCCESS
+  FAILED
+  CANCELLED
 }
