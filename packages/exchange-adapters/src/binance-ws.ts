@@ -1,175 +1,260 @@
-// Binance WebSocket Stream — Real-time prices, klines, order book, and user data
+// TradeOS — Binance WebSocket Stream
+// Real-time price, candlestick, and order book data from Binance
+
+import WebSocket from 'ws';
 import { EventEmitter } from 'events';
-import * as WebSocket from 'ws';
-import { PriceUpdate, KlineUpdate, OrderUpdate, AccountUpdate } from './websocket';
 
-export class BinanceStream extends EventEmitter {
+export interface Candle {
+  openTime: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  closeTime: number;
+}
+
+export interface Ticker {
+  symbol: string;
+  price: number;
+  priceChange: number;
+  priceChangePercent: number;
+  volume: number;
+  high: number;
+  low: number;
+  timestamp: number;
+}
+
+export interface OrderBook {
+  symbol: string;
+  bids: [number, number][]; // [price, quantity]
+  asks: [number, number][];
+  timestamp: number;
+}
+
+export class BinanceWS extends EventEmitter {
   private ws: WebSocket | null = null;
-  private url: string;
-  private subscriptions: Set<string> = new Set();
-  private isTestnet: boolean;
+  private baseUrl: string;
+  private streams: string[] = [];
   private reconnectAttempts = 0;
-  private maxReconnectAttempts = 10;
-  private reconnectTimer: any = null;
+  private maxReconnects = 10;
+  private isTestnet: boolean;
+  private pingInterval: NodeJS.Timeout | null = null;
 
-  constructor(isTestnet: boolean = false) {
+  constructor(isTestnet = true) {
     super();
     this.isTestnet = isTestnet;
-    this.url = isTestnet
-      ? 'wss://stream.binancefuture.com/ws'
-      : 'wss://stream.binance.com:9443/ws';
+    this.baseUrl = isTestnet
+      ? 'wss://stream.testnet.binance.vision/stream'
+      : 'wss://stream.binance.com:9443/stream';
   }
 
-  isConnected(): boolean {
-    return this.ws?.readyState === WebSocket.OPEN;
+  // ============ STREAM MANAGEMENT ============
+
+  connect(symbols: string[], streamTypes: string[] = ['ticker', 'kline_1m']): void {
+    this.streams = [];
+    for (const symbol of symbols) {
+      for (const type of streamTypes) {
+        if (type === 'ticker') this.streams.push(`${symbol.toLowerCase()}@ticker`);
+        if (type === 'kline_1m') this.streams.push(`${symbol.toLowerCase()}@kline_1m`);
+        if (type === 'kline_5m') this.streams.push(`${symbol.toLowerCase()}@kline_5m`);
+        if (type === 'kline_15m') this.streams.push(`${symbol.toLowerCase()}@kline_15m`);
+        if (type === 'kline_1h') this.streams.push(`${symbol.toLowerCase()}@kline_1h`);
+        if (type === 'depth') this.streams.push(`${symbol.toLowerCase()}@depth20@100ms`);
+        if (type === 'trade') this.streams.push(`${symbol.toLowerCase()}@trade`);
+      }
+    }
+
+    const url = `${this.baseUrl}?streams=${this.streams.join('/')}`;
+    this.createConnection(url);
   }
 
-  connect(): void {
-    if (this.isConnected()) return;
-    console.log(`🔌 Connecting to Binance WebSocket (${this.isTestnet ? 'testnet' : 'live'})...`);
-    this.ws = new WebSocket(this.url);
+  private createConnection(url: string): void {
+    console.log(`🔌 Connecting to Binance WebSocket (${this.isTestnet ? 'testnet' : 'mainnet'})...`);
+
+    this.ws = new WebSocket(url);
 
     this.ws.on('open', () => {
-      console.log('✅ Binance WebSocket connected');
+      console.log(`✅ Binance WS connected — ${this.streams.length} streams active`);
       this.reconnectAttempts = 0;
-      this.emit('connected', { exchange: 'binance' });
-      for (const sub of this.subscriptions) { this.sendSubscription(sub); }
+      this.emit('connected');
+
+      // Keepalive ping
+      this.pingInterval = setInterval(() => {
+        if (this.ws?.readyState === WebSocket.OPEN) {
+          this.ws.ping();
+        }
+      }, 30000);
     });
 
     this.ws.on('message', (data: WebSocket.RawData) => {
       try {
         const msg = JSON.parse(data.toString());
         this.handleMessage(msg);
-      } catch (e) { console.error('Binance WS parse error:', e); }
+      } catch (e) {
+        console.error('Parse error:', e);
+      }
+    });
+
+    this.ws.on('error', (err: Error) => {
+      console.error('❌ Binance WS error:', err.message);
+      this.emit('error', err);
     });
 
     this.ws.on('close', () => {
-      console.log('⚠️ Binance WebSocket disconnected');
-      this.emit('disconnected', { exchange: 'binance' });
-      this.attemptReconnect();
-    });
-
-    this.ws.on('error', (err) => {
-      console.error('❌ Binance WebSocket error:', err.message);
-      this.emit('error', { exchange: 'binance', error: err.message });
+      console.log('⚠️ Binance WS disconnected');
+      this.cleanup();
       this.attemptReconnect();
     });
   }
 
-  // ============ SUBSCRIPTIONS ============
+  private handleMessage(msg: any): void {
+    if (!msg.stream || !msg.data) return;
 
-  subscribeTicker(symbol: string): void {
-    const stream = `${symbol.toLowerCase()}@ticker`;
-    this.subscriptions.add(stream);
-    this.sendSubscription(stream);
+    const stream = msg.stream as string;
+    const data = msg.data;
+
+    // Ticker data
+    if (stream.includes('@ticker')) {
+      const ticker: Ticker = {
+        symbol: data.s,
+        price: parseFloat(data.c),
+        priceChange: parseFloat(data.p),
+        priceChangePercent: parseFloat(data.P),
+        volume: parseFloat(data.v),
+        high: parseFloat(data.h),
+        low: parseFloat(data.l),
+        timestamp: data.E,
+      };
+      this.emit('ticker', ticker);
+    }
+
+    // Candlestick data
+    if (stream.includes('@kline')) {
+      const kline = data.k;
+      const candle: Candle = {
+        openTime: kline.t,
+        open: parseFloat(kline.o),
+        high: parseFloat(kline.h),
+        low: parseFloat(kline.l),
+        close: parseFloat(kline.c),
+        volume: parseFloat(kline.v),
+        closeTime: kline.T,
+      };
+      this.emit('candle', { symbol: data.s, candle, isClosed: kline.x });
+    }
+
+    // Order book depth
+    if (stream.includes('@depth')) {
+      const orderBook: OrderBook = {
+        symbol: data.s || stream.split('@')[0].toUpperCase(),
+        bids: (data.bids || data.b || []).map((b: string[]) => [parseFloat(b[0]), parseFloat(b[1])] as [number, number]),
+        asks: (data.asks || data.a || []).map((a: string[]) => [parseFloat(a[0]), parseFloat(a[1])] as [number, number]),
+        timestamp: Date.now(),
+      };
+      this.emit('orderbook', orderBook);
+    }
+
+    // Trade data
+    if (stream.includes('@trade')) {
+      this.emit('trade', {
+        symbol: data.s,
+        price: parseFloat(data.p),
+        quantity: parseFloat(data.q),
+        timestamp: data.T,
+        isBuyerMaker: data.m,
+      });
+    }
   }
 
-  subscribeTickers(symbols: string[]): void {
-    for (const s of symbols) this.subscribeTicker(s);
+  // ============ RECONNECTION ============
+
+  private attemptReconnect(): void {
+    if (this.reconnectAttempts >= this.maxReconnects) {
+      console.error(`❌ Max reconnection attempts (${this.maxReconnects}) reached. Giving up.`);
+      this.emit('maxReconnectsReached');
+      return;
+    }
+
+    this.reconnectAttempts++;
+    const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000); // Exponential backoff
+    console.log(`🔄 Reconnecting in ${delay / 1000}s (attempt ${this.reconnectAttempts}/${this.maxReconnects})...`);
+
+    setTimeout(() => {
+      const url = `${this.baseUrl}?streams=${this.streams.join('/')}`;
+      this.createConnection(url);
+    }, delay);
   }
 
-  subscribeKline(symbol: string, interval: string = '1m'): void {
-    const stream = `${symbol.toLowerCase()}@kline_${interval}`;
-    this.subscriptions.add(stream);
-    this.sendSubscription(stream);
+  // ============ SUBSCRIPTION MANAGEMENT ============
+
+  subscribe(symbols: string[], streamTypes: string[]): void {
+    const newStreams = [];
+    for (const symbol of symbols) {
+      for (const type of streamTypes) {
+        const streamName = `${symbol.toLowerCase()}@${type}`;
+        if (!this.streams.includes(streamName)) {
+          newStreams.push(streamName);
+          this.streams.push(streamName);
+        }
+      }
+    }
+
+    if (this.ws?.readyState === WebSocket.OPEN && newStreams.length > 0) {
+      this.ws.send(JSON.stringify({
+        method: 'SUBSCRIBE',
+        params: newStreams,
+        id: Date.now(),
+      }));
+      console.log(`📡 Subscribed to ${newStreams.length} new streams`);
+    }
   }
 
-  subscribeDepth(symbol: string, level: string = '20'): void {
-    const stream = `${symbol.toLowerCase()}@depth${level}@100ms`;
-    this.subscriptions.add(stream);
-    this.sendSubscription(stream);
+  unsubscribe(symbols: string[], streamTypes: string[]): void {
+    const removeStreams = [];
+    for (const symbol of symbols) {
+      for (const type of streamTypes) {
+        const streamName = `${symbol.toLowerCase()}@${type}`;
+        if (this.streams.includes(streamName)) {
+          removeStreams.push(streamName);
+        }
+      }
+    }
+
+    if (this.ws?.readyState === WebSocket.OPEN && removeStreams.length > 0) {
+      this.ws.send(JSON.stringify({
+        method: 'UNSUBSCRIBE',
+        params: removeStreams,
+        id: Date.now(),
+      }));
+      this.streams = this.streams.filter((s) => !removeStreams.includes(s));
+      console.log(`📡 Unsubscribed from ${removeStreams.length} streams`);
+    }
   }
 
-  subscribeUserData(listenKey: string): void {
-    this.subscriptions.add(listenKey);
-    this.sendSubscription(listenKey);
-  }
+  // ============ CLEANUP ============
 
-  unsubscribe(stream: string): void {
-    this.subscriptions.delete(stream);
-    if (this.isConnected()) {
-      this.ws!.send(JSON.stringify({ method: 'UNSUBSCRIBE', params: [stream], id: Date.now() }));
+  private cleanup(): void {
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = null;
     }
   }
 
   disconnect(): void {
-    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-    this.subscriptions.clear();
-    if (this.ws) { this.ws.close(); this.ws = null; }
+    this.cleanup();
+    if (this.ws) {
+      this.ws.close();
+      this.ws = null;
+    }
+    console.log('🔌 Binance WS disconnected');
   }
 
-  // ============ LISTEN KEY ============
-
-  async getListenKey(apiKey: string): Promise<string> {
-    const axios = require('axios').default;
-    const url = this.isTestnet
-      ? 'https://testnet.binancefuture.com/fapi/v1/listenKey'
-      : 'https://fapi.binance.com/fapi/v1/listenKey';
-    const response = await axios.post(url, null, { headers: { 'X-MBX-APIKEY': apiKey } });
-    return response.data.listenKey;
+  getStreamCount(): number {
+    return this.streams.length;
   }
 
-  // ============ INTERNAL ============
-
-  private sendSubscription(stream: string): void {
-    if (this.isConnected()) {
-      this.ws!.send(JSON.stringify({ method: 'SUBSCRIBE', params: [stream], id: Date.now() }));
-    }
-  }
-
-  private handleMessage(msg: any): void {
-    // 24hr Ticker
-    if (msg.e === '24hrTicker') {
-      this.emit('price', {
-        symbol: msg.s, exchange: 'binance',
-        price: parseFloat(msg.c), bid: parseFloat(msg.b), ask: parseFloat(msg.a),
-        volume: parseFloat(msg.v), changePct: parseFloat(msg.P) / 100, timestamp: msg.E,
-      } as PriceUpdate);
-    }
-
-    // Kline
-    if (msg.e === 'kline') {
-      const k = msg.k;
-      this.emit('kline', {
-        symbol: msg.s, exchange: 'binance', interval: k.i,
-        open: parseFloat(k.o), high: parseFloat(k.h), low: parseFloat(k.l),
-        close: parseFloat(k.c), volume: parseFloat(k.v), isClosed: k.x, timestamp: k.t,
-      } as KlineUpdate);
-    }
-
-    // Order update (user data stream)
-    if (msg.e === 'ORDER_TRADE_UPDATE') {
-      const o = msg.o;
-      this.emit('order', {
-        exchange: 'binance', orderId: o.i.toString(), status: o.X,
-        symbol: o.s, side: o.S, type: o.o,
-        quantity: parseFloat(o.q), filledQuantity: parseFloat(o.z),
-        avgPrice: parseFloat(o.ap), timestamp: o.T,
-      } as OrderUpdate);
-    }
-
-    // Account update (user data stream)
-    if (msg.e === 'ACCOUNT_UPDATE') {
-      const a = msg.a;
-      this.emit('account', {
-        exchange: 'binance',
-        balances: (a.B || []).map((b: any) => ({ asset: b.a, free: parseFloat(b.f), locked: parseFloat(b.l) })),
-        reason: a.m || 'ACCOUNT_UPDATE', timestamp: msg.E,
-      } as AccountUpdate);
-    }
-  }
-
-  private attemptReconnect(): void {
-    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.error(`❌ Binance WS: Max reconnection attempts reached`);
-      this.emit('error', { exchange: 'binance', error: 'Max reconnection attempts reached' });
-      return;
-    }
-    this.reconnectAttempts++;
-    const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
-    console.log(`🔄 Binance WS: Reconnecting in ${delay / 1000}s (attempt ${this.reconnectAttempts})...`);
-    this.reconnectTimer = setTimeout(() => this.connect(), delay);
+  isConnected(): boolean {
+    return this.ws?.readyState === WebSocket.OPEN;
   }
 }
-
-export { BinanceStream };

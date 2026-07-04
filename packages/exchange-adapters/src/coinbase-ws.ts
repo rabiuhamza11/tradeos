@@ -1,39 +1,70 @@
-// Coinbase WebSocket Stream — Real-time prices and order book from Coinbase Advanced Trade
-import { EventEmitter } from 'events';
-import * as WebSocket from 'ws';
-import { PriceUpdate, KlineUpdate, OrderUpdate } from './websocket';
+// TradeOS — Coinbase Advanced WebSocket Stream
+// Real-time price, candlestick, and ticker data from Coinbase
 
-export class CoinbaseStream extends EventEmitter {
+import WebSocket from 'ws';
+import { EventEmitter } from 'events';
+
+export interface CoinbaseTicker {
+  product_id: string;
+  price: number;
+  volume_24h: number;
+  low_24h: number;
+  high_24h: number;
+  open_24h: number;
+  best_bid: number;
+  best_ask: number;
+  timestamp: string;
+}
+
+export interface CoinbaseCandle {
+  product_id: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  start: number;
+  timestamp: number;
+}
+
+export class CoinbaseWS extends EventEmitter {
   private ws: WebSocket | null = null;
-  private wsUrl: string;
-  private subscriptions: Set<string> = new Set();
+  private url = 'wss://ws-feed.exchange.coinbase.com';
+  private productIds: string[] = [];
+  private channels: string[] = ['ticker', 'matches', 'heartbeat'];
   private reconnectAttempts = 0;
-  private maxReconnectAttempts = 10;
-  private reconnectTimer: any = null;
+  private maxReconnects = 10;
   private isTestnet: boolean;
 
-  constructor(isTestnet: boolean = false) {
+  constructor(isTestnet = true) {
     super();
     this.isTestnet = isTestnet;
-    // Coinbase Advanced Trade WebSocket
-    this.wsUrl = isTestnet
-      ? 'wss://advanced-trade-ws-sandbox.coinbase.com'
-      : 'wss://advanced-trade-ws.coinbase.com';
+    if (isTestnet) {
+      this.url = 'wss://ws-feed-public.sandbox.exchange.coinbase.com';
+    }
   }
 
-  connect(): void {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) return;
-    console.log(`🔌 Connecting to Coinbase WebSocket (${this.isTestnet ? 'sandbox' : 'live'})...`);
-    this.ws = new WebSocket(this.wsUrl);
+  // ============ CONNECTION ============
+
+  connect(productIds: string[], channels: string[] = this.channels): void {
+    this.productIds = productIds;
+    this.channels = channels;
+
+    console.log(`🔌 Connecting to Coinbase WebSocket (${this.isTestnet ? 'sandbox' : 'production'})...`);
+
+    this.ws = new WebSocket(this.url);
 
     this.ws.on('open', () => {
-      console.log('✅ Coinbase WebSocket connected');
+      console.log(`✅ Coinbase WS connected — watching ${productIds.length} products`);
       this.reconnectAttempts = 0;
-      this.emit('connected', { exchange: 'coinbase' });
-      // Resubscribe to all streams
-      for (const sub of this.subscriptions) {
-        this.sendSubscription(sub);
-      }
+      this.emit('connected');
+
+      // Subscribe to channels
+      this.ws?.send(JSON.stringify({
+        type: 'subscribe',
+        product_ids: productIds,
+        channels: channels,
+      }));
     });
 
     this.ws.on('message', (data: WebSocket.RawData) => {
@@ -41,155 +72,119 @@ export class CoinbaseStream extends EventEmitter {
         const msg = JSON.parse(data.toString());
         this.handleMessage(msg);
       } catch (e) {
-        console.error('Coinbase WS parse error:', e);
+        console.error('Coinbase parse error:', e);
       }
+    });
+
+    this.ws.on('error', (err: Error) => {
+      console.error('❌ Coinbase WS error:', err.message);
+      this.emit('error', err);
     });
 
     this.ws.on('close', () => {
-      console.log('⚠️ Coinbase WebSocket disconnected');
-      this.emit('disconnected', { exchange: 'coinbase' });
+      console.log('⚠️ Coinbase WS disconnected');
       this.attemptReconnect();
     });
-
-    this.ws.on('error', (err) => {
-      console.error('❌ Coinbase WebSocket error:', err.message);
-      this.emit('error', { exchange: 'coinbase', error: err.message });
-      this.attemptReconnect();
-    });
-  }
-
-  // ============ SUBSCRIPTIONS ============
-
-  // Subscribe to real-time ticker updates
-  subscribeTicker(productIds: string[]): void {
-    const sub = JSON.stringify({ type: 'ticker', product_ids: productIds });
-    this.subscriptions.add(sub);
-    this.sendSubscription(sub);
-  }
-
-  // Subscribe to level 2 order book updates
-  subscribeLevel2(productIds: string[]): void {
-    const sub = JSON.stringify({ type: 'level2_batched', product_ids: productIds });
-    this.subscriptions.add(sub);
-    this.sendSubscription(sub);
-  }
-
-  // Subscribe to candle/market updates
-  subscribeCandles(productIds: string[], interval: string = '1m'): void {
-    // Coinbase doesn't have a direct kline WS channel — use ticker batch
-    const sub = JSON.stringify({ type: 'market_batched', product_ids: productIds });
-    this.subscriptions.add(sub);
-    this.sendSubscription(sub);
-  }
-
-  // Subscribe to user order updates (requires JWT auth)
-  subscribeUserOrders(jwtToken: string): void {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-    this.ws.send(JSON.stringify({
-      type: 'subscribe',
-      channel: 'user',
-      jwt: jwtToken,
-    }));
-  }
-
-  unsubscribe(productIds: string[], channel: string): void {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-    this.ws.send(JSON.stringify({
-      type: 'unsubscribe',
-      channel,
-      product_ids: productIds,
-    }));
-  }
-
-  disconnect(): void {
-    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-    this.subscriptions.clear();
-    if (this.ws) { this.ws.close(); this.ws = null; }
-  }
-
-  // ============ INTERNAL ============
-
-  private sendSubscription(subStr: string): void {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-    try {
-      const sub = JSON.parse(subStr);
-      this.ws.send(JSON.stringify({
-        type: 'subscribe',
-        channel: sub.type,
-        product_ids: sub.product_ids,
-      }));
-    } catch {}
   }
 
   private handleMessage(msg: any): void {
-    // Coinbase Advanced Trade WS message format:
-    // { channel: 'ticker', events: [{ type: 'update', tickers: [{...}] }] }
+    switch (msg.type) {
+      case 'ticker':
+        this.emit('ticker', {
+          product_id: msg.product_id,
+          price: parseFloat(msg.price),
+          volume_24h: parseFloat(msg.volume_24h),
+          low_24h: parseFloat(msg.low_24h),
+          high_24h: parseFloat(msg.high_24h),
+          open_24h: parseFloat(msg.open_24h),
+          best_bid: parseFloat(msg.best_bid),
+          best_ask: parseFloat(msg.best_ask),
+          timestamp: msg.time,
+        } as CoinbaseTicker);
+        break;
 
-    if (msg.channel === 'ticker') {
-      for (const event of (msg.events || [])) {
-        const tickers = event.tickers || [];
-        for (const t of tickers) {
-          const update: PriceUpdate = {
-            symbol: t.product_id,
-            exchange: 'coinbase',
-            price: parseFloat(t.price),
-            bid: parseFloat(t.best_bid || t.price * 0.999),
-            ask: parseFloat(t.best_ask || t.price * 1.001),
-            volume: parseFloat(t.volume_24h || '0'),
-            changePct: 0, // Coinbase ticker doesn't include 24h change directly
-            timestamp: Date.now(),
-          };
-          this.emit('price', update);
-        }
-      }
-    }
-
-    if (msg.channel === 'level2_batched') {
-      for (const event of (msg.events || [])) {
-        // Emit order book updates
-        this.emit('orderbook', {
-          exchange: 'coinbase',
-          symbol: event.product_id,
-          bids: (event.updates || []).filter((u: any) => u.side === 'bid').map((u: any) => [parseFloat(u.price_level), parseFloat(u.new_quantity]) as [number, number]),
-          asks: (event.updates || []).filter((u: any) => u.side === 'offer').map((u: any) => [parseFloat(u.price_level), parseFloat(u.new_quantity]) as [number, number]),
-          timestamp: Date.now(),
+      case 'match':
+      case 'last_match':
+        this.emit('trade', {
+          product_id: msg.product_id,
+          price: parseFloat(msg.price),
+          size: parseFloat(msg.size),
+          side: msg.side,
+          timestamp: msg.time,
+          trade_id: msg.trade_id,
         });
-      }
-    }
+        break;
 
-    if (msg.channel === 'user') {
-      for (const event of (msg.events || [])) {
-        if (event.type === 'order') {
-          const o = event.order;
-          const update: OrderUpdate = {
-            exchange: 'coinbase',
-            orderId: o.order_id,
-            status: o.status,
-            symbol: o.product_id,
-            side: o.side?.toUpperCase() || 'BUY',
-            type: o.order_type || 'MARKET',
-            quantity: parseFloat(o.size || '0'),
-            filledQuantity: parseFloat(o.completed_size || '0'),
-            avgPrice: parseFloat(o.average_price || '0'),
-            timestamp: Date.now(),
-          };
-          this.emit('order', update);
-        }
-      }
+      case 'heartbeat':
+        // Keepalive
+        break;
+
+      case 'subscriptions':
+        console.log(`📡 Coinbase subscriptions confirmed: ${msg.channels?.length || 0} channels`);
+        break;
+
+      case 'error':
+        console.error('Coinbase error:', msg.message);
+        this.emit('error', new Error(msg.message));
+        break;
     }
   }
+
+  // ============ RECONNECTION ============
 
   private attemptReconnect(): void {
-    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.error(`❌ Coinbase WS: Max reconnection attempts reached`);
-      this.emit('error', { exchange: 'coinbase', error: 'Max reconnection attempts reached' });
+    if (this.reconnectAttempts >= this.maxReconnects) {
+      console.error(`❌ Coinbase max reconnections reached`);
+      this.emit('maxReconnectsReached');
       return;
     }
+
     this.reconnectAttempts++;
     const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
-    console.log(`🔄 Coinbase WS: Reconnecting in ${delay / 1000}s (attempt ${this.reconnectAttempts})...`);
-    this.reconnectTimer = setTimeout(() => this.connect(), delay);
+
+    setTimeout(() => {
+      this.connect(this.productIds, this.channels);
+    }, delay);
+  }
+
+  // ============ MANAGEMENT ============
+
+  subscribe(productIds: string[], channels: string[]): void {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({
+        type: 'subscribe',
+        product_ids: productIds,
+        channels: channels,
+      }));
+      this.productIds = [...new Set([...this.productIds, ...productIds])];
+    }
+  }
+
+  unsubscribe(productIds: string[], channels: string[]): void {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({
+        type: 'unsubscribe',
+        product_ids: productIds,
+        channels: channels,
+      }));
+      this.productIds = this.productIds.filter((p) => !productIds.includes(p));
+    }
+  }
+
+  disconnect(): void {
+    if (this.ws) {
+      this.ws.send(JSON.stringify({
+        type: 'unsubscribe',
+        product_ids: this.productIds,
+        channels: this.channels,
+      }));
+      this.ws.close();
+      this.ws = null;
+    }
+    console.log('🔌 Coinbase WS disconnected');
+  }
+
+  isConnected(): boolean {
+    return this.ws?.readyState === WebSocket.OPEN;
   }
 }
-
-export { CoinbaseStream };
