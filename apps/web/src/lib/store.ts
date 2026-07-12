@@ -74,3 +74,6 @@ export const useStore = create<AppState>((set) => ({
   toggleNotifications: () => set((state) => ({ notificationsOpen: !state.notificationsOpen })),
   setUnreadCount: (count) => set({ unreadCount: count }),
 }));
+
+// Compat aliases
+export const useAuthStore = useStore;

@@ -260,3 +260,25 @@ export default {
   settings: settingsApi,
   stream: streamClient,
 };
+
+// Compat aliases — marketApi fetches live data from TradeOS AI backend
+const TRADEOS_AI = 'https://superagent-2286fb2f.base44.app/functions/tradeosAI';
+
+export const marketApi = {
+  movers: async () => {
+    const res = await fetch(TRADEOS_AI);
+    const json = await res.json();
+    const markets: any[] = json.markets || [];
+    const sorted = [...markets].sort((a, b) => b.change24h - a.change24h);
+    return {
+      data: {
+        gainers: sorted.filter(m => m.change24h > 0).slice(0, 5).map(m => ({
+          symbol: m.symbol, changePct: m.change24h / 100, price: m.price
+        })),
+        losers: sorted.filter(m => m.change24h < 0).slice(0, 5).map(m => ({
+          symbol: m.symbol, changePct: m.change24h / 100, price: m.price
+        })),
+      }
+    };
+  },
+};

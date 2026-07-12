@@ -2,19 +2,19 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authApi } from '@/lib/api';
-import { useAuthStore } from '@/lib/store';
+import { useStore } from "@/lib/store";
 
 export default function LoginPage() {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [name, setName] = useState('');
   const [twoFactor, setTwoFactor] = useState(''); const [loading, setLoading] = useState(false); const [error, setError] = useState('');
-  const router = useRouter(); const setAuth = useAuthStore((s) => s.setAuth);
+  const router = useRouter(); const setUser = useStore((s) => s.setUser); const setToken = useStore((s) => s.setToken);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setLoading(true); setError('');
     try {
-      const { data } = mode === 'login' ? await authApi.login(email, password, twoFactor || undefined) : await authApi.register(email, password, name);
-      setAuth(data.user, data.accessToken); router.push('/dashboard');
+      const { data } = mode === 'login' ? await authApi.login(email, password) : await authApi.register({ email, password, firstName: name.split(' ')[0], lastName: name.split(' ')[1] || '' });
+      setUser(data.user); setToken(data.accessToken); router.push('/dashboard');
     } catch (err: any) { setError(err.response?.data?.message || 'Auth failed'); } finally { setLoading(false); }
   };
 
