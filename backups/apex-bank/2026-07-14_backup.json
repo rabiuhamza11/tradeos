@@ -1,0 +1,69 @@
+{
+  "backup_date": "2026-07-14T23:02:00+01:00",
+  "backup_type": "daily_entity_snapshot",
+  "source": "Apex Bank - Base44 Entities",
+  "entities": {
+    "ApexAccount": [
+      {"id": "6a56818f415247867d52ab4f", "account_name": "Savings Vault", "account_number": "3301 5567 8821", "account_type": "savings", "currency": "USD", "balance": 52000.0, "status": "active", "created_date": "2026-07-14T18:35:59.410000", "updated_date": "2026-07-14T18:35:59.410000", "created_by": "hamzarabiu390@gmail.com"},
+      {"id": "6a56818f415247867d52ab50", "account_name": "Main Checking", "account_number": "4721 8834 9012", "account_type": "checking", "currency": "USD", "balance": 24850.75, "status": "active", "created_date": "2026-07-14T18:35:59.410000", "updated_date": "2026-07-14T18:35:59.410000", "created_by": "hamzarabiu390@gmail.com"},
+      {"id": "6a56818f415247867d52ab51", "account_name": "Credit Card", "account_number": "5521 7744 8812", "account_type": "credit", "currency": "USD", "balance": 3200.0, "status": "active", "created_date": "2026-07-14T18:35:59.410000", "updated_date": "2026-07-14T18:35:59.410000", "created_by": "hamzarabiu390@gmail.com"},
+      {"id": "6a56818f415247867d52ab52", "account_name": "Investment Portfolio", "account_number": "7845 2201 3349", "account_type": "investment", "currency": "USD", "balance": 118500.0, "status": "active", "created_date": "2026-07-14T18:35:59.410000", "updated_date": "2026-07-14T18:35:59.410000", "created_by": "hamzarabiu390@gmail.com"},
+      {"id": "6a56818f415247867d52ab53", "account_name": "Hauwa", "account_number": "3008 1452 2360", "account_type": "savings", "currency": "USD", "balance": 2000.0, "status": "active", "created_date": "2026-07-14T18:35:59.410000", "updated_date": "2026-07-14T18:35:59.410000", "created_by": "hamzarabiu390@gmail.com"},
+      {"id": "6a56818f415247867d52ab54", "account_name": "Rabiu Hussaini Muhammed", "account_number": "8812 2784 1674", "account_type": "savings", "currency": "USD", "balance": 0.0, "status": "active", "created_date": "2026-07-14T18:35:59.410000", "updated_date": "2026-07-14T18:35:59.410000", "created_by": "hamzarabiu390@gmail.com"},
+      {"id": "6a56818f415247867d52ab55", "account_name": "Main Checking", "account_number": "4521 8934 7612", "account_type": "checking", "currency": "USD", "balance": 12450.75, "status": "active", "created_date": "2026-07-14T18:35:59.410000", "updated_date": "2026-07-14T18:35:59.410000", "created_by": "hamzarabiu390@gmail.com"},
+      {"id": "6a56818f415247867d52ab56", "account_name": "Investment Portfolio", "account_number": "5567 8901 2345", "account_type": "investment", "currency": "USD", "balance": 78500.0, "status": "active", "created_date": "2026-07-14T18:35:59.410000", "updated_date": "2026-07-14T18:35:59.410000", "created_by": "hamzarabiu390@gmail.com"},
+      {"id": "6a56818f415247867d52ab57", "account_name": "Credit Card", "account_number": "9912 3345 6678", "account_type": "credit", "currency": "USD", "balance": -1250.3, "status": "active", "created_date": "2026-07-14T18:35:59.410000", "updated_date": "2026-07-14T18:35:59.410000", "created_by": "hamzarabiu390@gmail.com"},
+      {"id": "6a56818f415247867d52ab58", "account_name": "Savings", "account_number": "7823 4561 9087", "account_type": "savings", "currency": "USD", "balance": 34200.0, "status": "active", "created_date": "2026-07-14T18:35:59.410000", "updated_date": "2026-07-14T18:35:59.410000", "created_by": "hamzarabiu390@gmail.com"}
+    ],
+    "ApexTransaction": [
+      {"id": "6a56819f415247867d52ab76", "account_id": "1", "type": "debit", "amount": 39.99, "description": "Udemy Course - React", "category": "education", "recipient": "Udemy", "status": "pending", "reference": "EDU-7745", "created_date": "2026-07-14T18:36:15.172000", "updated_date": "2026-07-14T18:36:15.172000"},
+      {"id": "6a56819f415247867d52ab77", "account_id": "1", "type": "transfer", "amount": 500.0, "description": "Transfer to Savings", "category": "transfer", "recipient": "Self", "status": "completed", "reference": "TRF-99012", "created_date": "2026-07-14T18:36:15.172000", "updated_date": "2026-07-14T18:36:15.172000"},
+      {"id": "6a56819f415247867d52ab78", "account_id": "1", "type": "credit", "amount": 150.0, "description": "Freelance Payment - Design Work", "category": "salary", "recipient": "Client", "status": "completed", "reference": "FRL-3321", "created_date": "2026-07-14T18:36:15.172000", "updated_date": "2026-07-14T18:36:15.172000"},
+      {"id": "6a56819f415247867d52ab79", "account_id": "1", "type": "debit", "amount": 65.0, "description": "Annual Health Checkup", "category": "health", "recipient": "City Clinic", "status": "completed", "reference": "MED-1102", "created_date": "2026-07-14T18:36:15.172000", "updated_date": "2026-07-14T18:36:15.172000"},
+      {"id": "6a56819f415247867d52ab7a", "account_id": "1", "type": "debit", "amount": 45.0, "description": "Uber Ride - Airport", "category": "transport", "recipient": "Uber", "status": "completed", "reference": "UBER-9912", "created_date": "2026-07-14T18:36:15.172000", "updated_date": "2026-07-14T18:36:15.172000"},
+      {"id": "6a56819f415247867d52ab7b", "account_id": "1", "type": "debit", "amount": 14.99, "description": "Netflix Subscription", "category": "entertainment", "recipient": "Netflix", "status": "completed", "reference": "SUB-NET01", "created_date": "2026-07-14T18:36:15.172000", "updated_date": "2026-07-14T18:36:15.172000"},
+      {"id": "6a56819f415247867d52ab7c", "account_id": "1", "type": "debit", "amount": 250.0, "description": "Amazon Purchase - Electronics", "category": "shopping", "recipient": "Amazon", "status": "completed", "reference": "AMZ-88123", "created_date": "2026-07-14T18:36:15.172000", "updated_date": "2026-07-14T18:36:15.172000"},
+      {"id": "6a56819f415247867d52ab7d", "account_id": "1", "type": "debit", "amount": 85.5, "description": "Whole Foods Market", "category": "food", "recipient": "Whole Foods", "status": "completed", "reference": "POS-87234", "created_date": "2026-07-14T18:36:15.172000", "updated_date": "2026-07-14T18:36:15.172000"},
+      {"id": "6a56819f415247867d52ab7e", "account_id": "1", "type": "credit", "amount": 5200.0, "description": "Monthly Salary - Acme Corp", "category": "salary", "recipient": "Acme Corp", "status": "completed", "reference": "SAL-20250501", "created_date": "2026-07-14T18:36:15.172000", "updated_date": "2026-07-14T18:36:15.172000"},
+      {"id": "6a56819f415247867d52ab7f", "account_id": "1", "type": "payment", "amount": 129.99, "description": "Electric Company - Monthly", "category": "utilities", "recipient": "ConEdison", "status": "completed", "reference": "BILL-44521", "created_date": "2026-07-14T18:36:15.172000", "updated_date": "2026-07-14T18:36:15.173000"}
+    ],
+    "ApexCard": [
+      {"id": "6a56819f415247867d52ab67", "account_id": "main-checking", "card_holder_name": "Rabiu Hamza Mohammed", "card_number": "**** **** **** 0123", "card_type": "visa", "card_color": "#1a1a2e", "expiry_month": "09", "expiry_year": "2028", "cvv": "***", "daily_limit": 50000.0, "status": "active", "created_date": "2026-07-14T18:36:15.144000", "updated_date": "2026-07-14T18:36:15.144000"},
+      {"id": "6a56819f415247867d52ab68", "account_id": "savings-vault", "card_holder_name": "Rabiu Hamza Mohammed", "card_number": "**** **** **** 6543", "card_type": "mastercard", "card_color": "#0f3460", "expiry_month": "03", "expiry_year": "2029", "cvv": "***", "daily_limit": 100000.0, "status": "active", "created_date": "2026-07-14T18:36:15.144000", "updated_date": "2026-07-14T18:36:15.144000"},
+      {"id": "6a56819f415247867d52ab69", "account_id": "investment", "card_holder_name": "Rabiu Hamza Mohammed", "card_number": "**** ****** *50678", "card_type": "amex", "card_color": "#16213e", "expiry_month": "11", "expiry_year": "2027", "cvv": "****", "daily_limit": 200000.0, "status": "active", "created_date": "2026-07-14T18:36:15.144000", "updated_date": "2026-07-14T18:36:15.144000"}
+    ],
+    "ApexLoan": [
+      {"id": "6a56819f415247867d52ab80", "account_id": "checking", "loan_type": "personal", "amount": 25000.0, "interest_rate": 8.5, "tenure_months": 24.0, "monthly_payment": 1132.8, "amount_paid": 0.0, "status": "active", "purpose": "Business expansion - HarzDM", "start_date": "2026-07-01", "end_date": "2028-07-01", "created_date": "2026-07-14T18:36:15.206000", "updated_date": "2026-07-14T18:36:15.206000"},
+      {"id": "6a56819f415247867d52ab81", "account_id": "investment", "loan_type": "business", "amount": 100000.0, "interest_rate": 6.5, "tenure_months": 60.0, "monthly_payment": 1956.17, "amount_paid": 0.0, "status": "pending", "purpose": "GDEG blockchain infrastructure", "start_date": "2026-08-01", "end_date": "2031-08-01", "created_date": "2026-07-14T18:36:15.206000", "updated_date": "2026-07-14T18:36:15.206000"}
+    ],
+    "ApexBeneficiary": [
+      {"id": "6a56819f415247867d52ab72", "name": "Hauwa Mohammed", "bank_name": "UBA", "account_number": "2034326424", "email": "hauwa@email.com", "avatar_color": "#e94560", "transfer_type": "domestic", "routing_number": null, "iban": null, "swift_bic": null, "country": "Nigeria", "currency": "NGN", "created_date": "2026-07-14T18:36:15.160000", "updated_date": "2026-07-14T18:36:15.160000"},
+      {"id": "6a56819f415247867d52ab73", "name": "Rabiu Hussaini", "bank_name": "GTBank", "account_number": "0123456789", "email": null, "avatar_color": "#0f3460", "transfer_type": "domestic", "routing_number": null, "iban": null, "swift_bic": null, "country": "Nigeria", "currency": "NGN", "created_date": "2026-07-14T18:36:15.160000", "updated_date": "2026-07-14T18:36:15.160000"},
+      {"id": "6a56819f415247867d52ab74", "name": "James Anderson", "bank_name": "Chase", "account_number": "8821345690", "email": "james.a@email.com", "avatar_color": "#16213e", "transfer_type": "international", "routing_number": "021000021", "iban": null, "swift_bic": "CHASUS33", "country": "USA", "currency": "USD", "created_date": "2026-07-14T18:36:15.160000", "updated_date": "2026-07-14T18:36:15.160000"},
+      {"id": "6a56819f415247867d52ab75", "name": "Fatima Ibrahim", "bank_name": "Zenith Bank", "account_number": "9012345678", "email": null, "avatar_color": "#533483", "transfer_type": "domestic", "routing_number": null, "iban": null, "swift_bic": null, "country": "Nigeria", "currency": "NGN", "created_date": "2026-07-14T18:36:15.160000", "updated_date": "2026-07-14T18:36:15.160000"}
+    ],
+    "ApexSavingsGoal": [
+      {"id": "6a56819f415247867d52ab6a", "name": "New Car", "target_amount": 150000.0, "current_amount": 34000.0, "deadline": "2026-12-31", "account_id": "savings", "icon": "car", "color": "#e94560", "status": "active", "created_date": "2026-07-14T18:36:15.149000", "updated_date": "2026-07-14T18:36:15.149000"},
+      {"id": "6a56819f415247867d52ab6b", "name": "Emergency Fund", "target_amount": 50000.0, "current_amount": 12000.0, "deadline": "2026-09-30", "account_id": "savings", "icon": "shield", "color": "#0f3460", "status": "active", "created_date": "2026-07-14T18:36:15.149000", "updated_date": "2026-07-14T18:36:15.149000"},
+      {"id": "6a56819f415247867d52ab6c", "name": "Harz Ecosystem Growth", "target_amount": 500000.0, "current_amount": 78000.0, "deadline": "2027-06-30", "account_id": "investment", "icon": "rocket", "color": "#533483", "status": "active", "created_date": "2026-07-14T18:36:15.149000", "updated_date": "2026-07-14T18:36:15.149000"}
+    ],
+    "ApexBill": [
+      {"id": "6a56819f415247867d52ab6d", "biller_name": "AT&T Mobile", "category": "phone", "amount": 85.0, "due_date": "2026-05-20", "status": "paid", "account_id": "checking", "auto_pay": false, "created_date": "2026-07-14T18:36:15.155000", "updated_date": "2026-07-14T18:36:15.155000"},
+      {"id": "6a56819f415247867d52ab6e", "biller_name": "ConEdison Electric", "category": "electricity", "amount": 129.99, "due_date": "2026-06-05", "status": "pending", "account_id": "checking", "auto_pay": false, "created_date": "2026-07-14T18:36:15.155000", "updated_date": "2026-07-14T18:36:15.155000"},
+      {"id": "6a56819f415247867d52ab6f", "biller_name": "State Farm Insurance", "category": "insurance", "amount": 210.0, "due_date": "2026-06-01", "status": "overdue", "account_id": "checking", "auto_pay": false, "created_date": "2026-07-14T18:36:15.155000", "updated_date": "2026-07-14T18:36:15.155000"},
+      {"id": "6a56819f415247867d52ab70", "biller_name": "Spectrum Internet", "category": "internet", "amount": 79.99, "due_date": "2026-06-15", "status": "pending", "account_id": "checking", "auto_pay": true, "created_date": "2026-07-14T18:36:15.155000", "updated_date": "2026-07-14T18:36:15.155000"},
+      {"id": "6a56819f415247867d52ab71", "biller_name": "City Water Supply", "category": "water", "amount": 45.5, "due_date": "2026-06-10", "status": "pending", "account_id": "checking", "auto_pay": true, "created_date": "2026-07-14T18:36:15.155000", "updated_date": "2026-07-14T18:36:15.155000"}
+    ]
+  },
+  "summary": {
+    "total_accounts": 10,
+    "total_transactions": 10,
+    "total_cards": 3,
+    "total_loans": 2,
+    "total_beneficiaries": 4,
+    "total_savings_goals": 3,
+    "total_bills": 5,
+    "total_records": 37,
+    "total_balance_usd": 325200.20
+  }
+}
