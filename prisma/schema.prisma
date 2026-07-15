@@ -28,7 +28,7 @@ model User {
   updatedAt        DateTime     @updatedAt
 
   organizations    OrgMember[]
-  ownedOrganizations Organization[] @relation("OwnedOrganizations") @relation("OrgOwner")
+  ownedOrganizations Organization[] @relation("OrgOwner")
   portfolios       Portfolio[]
   trades           Trade[]
   orders           Order[]
