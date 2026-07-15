@@ -1,4 +1,3 @@
-# TradeOS CI/CD — updated with valid Vercel token
 name: TradeOS CI/CD
 
 on:
@@ -78,8 +77,12 @@ jobs:
             echo "⚠️ apps/web not found — skipping Vercel deploy"
             exit 0
           fi
+          # Remove stale .vercel dir so CLI uses env vars for project linking
+          rm -rf apps/web/.vercel .vercel
           npm install --legacy-peer-deps || true
-          npx vercel --prod --token=${{ secrets.VERCEL_TOKEN }} --cwd=apps/web --yes 2>&1 || {
+          cd apps/web
+          npx vercel link --yes --token=${{ secrets.VERCEL_TOKEN }} 2>&1 || true
+          npx vercel --prod --token=${{ secrets.VERCEL_TOKEN }} --yes 2>&1 || {
             echo "⚠️ Vercel deploy failed — continuing"
             exit 0
           }
