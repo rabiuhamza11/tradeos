@@ -17,7 +17,9 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
-        with: { node-version: 22 }
+        with:
+          node-version: 22
+          cache: false
       - run: npm install --legacy-peer-deps
       - run: npx prisma generate --schema=prisma/schema.prisma
         env: { DATABASE_URL: postgresql://test:test@localhost:5432/tradeos_test }
@@ -32,7 +34,9 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
-        with: { node-version: 22 }
+        with:
+          node-version: 22
+          cache: false
       - run: npm install --legacy-peer-deps
       - run: npx prisma generate --schema=prisma/schema.prisma
         env: { DATABASE_URL: postgresql://dummy:dummy@localhost:5432/dummy }
