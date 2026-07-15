@@ -1,3 +1,4 @@
+# TradeOS CI/CD — updated with valid Vercel token
 name: TradeOS CI/CD
 
 on:
