@@ -28,7 +28,7 @@ model User {
   updatedAt        DateTime     @updatedAt
 
   organizations    OrgMember[]
-  ownedOrganizations Organization[]
+  ownedOrganizations Organization[] @relation("OrgOwner")
   portfolios       Portfolio[]
   trades           Trade[]
   orders           Order[]
@@ -49,7 +49,7 @@ model Organization {
   updatedAt   DateTime     @updatedAt
 
   ownerId     String
-  owner       User         @relation(fields: [ownerId], references: [id])
+  owner       User         @relation("OrgOwner", fields: [ownerId], references: [id])
 
   members     OrgMember[]
   portfolios  Portfolio[]
@@ -301,7 +301,7 @@ model AIAgent {
   config      Json?
   performance Json?
   ownerId     String
-  owner       User         @relation(fields: [ownerId], references: [id])
+  owner       User         @relation("OrgOwner", fields: [ownerId], references: [id])
   orgId       String?
   org         Organization? @relation(fields: [orgId], references: [id])
   executions  AgentExecution[]
