@@ -5,7 +5,7 @@
   "scripts": {
     "build": "echo \"No build needed\" && exit 0",
     "test": "echo \"No tests\" && exit 0",
-    "lint": "echo \"No lint\" && exit 0"
+    "lint": "echo \"No linter\" && exit 0"
   },
   "dependencies": {
     "axios": "^1.6.0",
