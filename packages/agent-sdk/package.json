@@ -1,5 +1,8 @@
 {
   "name": "@tradeos/agent-sdk",
   "version": "1.0.0",
-  "main": "src/index.ts"
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "echo \"No tests\" && exit 0"
+  }
 }
