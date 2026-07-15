@@ -64,6 +64,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Deploy Web to Vercel
+        continue-on-error: true
         run: |
           if [ -z "${{ secrets.VERCEL_TOKEN }}" ]; then
             echo "⚠️ VERCEL_TOKEN not set — skipping Vercel deploy"
@@ -82,6 +83,7 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       - name: Deploy API to Render
+        continue-on-error: true
         run: |
           if [ -z "${{ secrets.RENDER_DEPLOY_HOOK }}" ]; then
             echo "⚠️ RENDER_DEPLOY_HOOK not set — skipping Render deploy"
