@@ -8,7 +8,9 @@
     "build": "electron-builder",
     "build:mac": "electron-builder --mac",
     "build:win": "electron-builder --win",
-    "build:linux": "electron-builder --linux"
+    "build:linux": "electron-builder --linux",
+    "test": "echo \"No tests\" && exit 0",
+    "lint": "echo \"No linter\" && exit 0"
   },
   "devDependencies": {
     "electron": "^28.0.0",
@@ -17,10 +19,20 @@
   "build": {
     "appId": "com.tradeos.app",
     "productName": "TradeOS",
-    "directories": { "output": "release" },
-    "files": ["src/**/*"],
-    "mac": { "category": "public.app-category.finance" },
-    "win": { "target": "nsis" },
-    "linux": { "target": "AppImage" }
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "src/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.finance"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
   }
 }
