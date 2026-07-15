@@ -5,12 +5,12 @@
   "main": "src/main.js",
   "scripts": {
     "start": "electron src/main.js",
-    "build": "echo 'Desktop build skipped in CI'",
+    "build": "echo \"Desktop build handled separately\" && exit 0",
     "build:mac": "electron-builder --mac",
     "build:win": "electron-builder --win",
     "build:linux": "electron-builder --linux",
-    "test": "echo 'No tests' && exit 0",
-    "lint": "echo 'No linter' && exit 0"
+    "test": "echo \"No tests for desktop app\" && exit 0",
+    "lint": "echo \"No linter for desktop app\" && exit 0"
   },
   "devDependencies": {
     "electron": "^28.0.0",
