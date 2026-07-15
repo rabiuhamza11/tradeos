@@ -2,7 +2,10 @@
   "name": "tradeos",
   "version": "1.0.0",
   "private": true,
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "dev": "turbo dev",
     "build": "turbo build",
@@ -17,7 +20,7 @@
   },
   "devDependencies": {
     "turbo": "^2.0.0",
-    "typescript": "^5.4.0",
+    "typescript": "^5.9.3",
     "prisma": "^5.10.0"
   },
   "packageManager": "npm@10.0.0"
