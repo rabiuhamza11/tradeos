@@ -6,8 +6,8 @@
     "start": "react-native start",
     "android": "react-native run-android",
     "ios": "react-native run-ios",
-    "build": "echo 'Use eas build for production builds'",
-    "test": "echo \"No tests\" && exit 0",
-    "lint": "echo \"No linter\" && exit 0"
+    "build": "echo \"Mobile build handled by EAS\" && exit 0",
+    "test": "echo \"No tests for mobile app\" && exit 0",
+    "lint": "echo \"No linter for mobile app\" && exit 0"
   }
 }
