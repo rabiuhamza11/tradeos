@@ -33,7 +33,7 @@ model User {
   trades           Trade[]
   orders           Order[]
   watchlists       Watchlist[]
-  agents           AIAgent[]
+  agents           AIAgent[] @relation("AgentOwner")
   notifications    Notification[]
   apiKeys          ExchangeCredential[]
   sessions         Session[]
@@ -301,7 +301,7 @@ model AIAgent {
   config      Json?
   performance Json?
   ownerId     String
-  owner       User         @relation("OrgOwner", fields: [ownerId], references: [id])
+  owner       User         @relation("AgentOwner", fields: [ownerId], references: [id])
   orgId       String?
   org         Organization? @relation(fields: [orgId], references: [id])
   executions  AgentExecution[]
