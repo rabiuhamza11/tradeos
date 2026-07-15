@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "main": "src/index.ts",
   "scripts": {
-    "test": "echo \"No tests\" && exit 0"
+    "test": "echo \"No tests\" && exit 0",
+    "build": "echo \"No build needed\" && exit 0",
+    "lint": "echo \"No lint\" && exit 0"
   }
 }
