@@ -80,7 +80,7 @@ jobs:
           # Remove stale .vercel dir so CLI uses env vars for project linking
           rm -rf apps/web/.vercel .vercel
           npm install --legacy-peer-deps || true
-          cd apps/web
+          # Vercel project has rootDirectory=apps/web — deploy from repo root
           npx vercel link --yes --token=${{ secrets.VERCEL_TOKEN }} 2>&1 || true
           npx vercel --prod --token=${{ secrets.VERCEL_TOKEN }} --yes 2>&1 || {
             echo "⚠️ Vercel deploy failed — continuing"
