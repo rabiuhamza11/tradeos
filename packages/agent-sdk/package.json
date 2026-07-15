@@ -5,6 +5,6 @@
   "scripts": {
     "test": "echo \"No tests\" && exit 0",
     "build": "echo \"No build needed\" && exit 0",
-    "lint": "echo \"No lint\" && exit 0"
+    "lint": "echo \"No linter\" && exit 0"
   }
 }
