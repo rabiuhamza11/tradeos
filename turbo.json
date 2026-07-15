@@ -24,7 +24,7 @@
       "persistent": true
     }
   },
-  "pipeline": {
+  "tasks": {
     "build": {
       "dependsOn": [
         "^build"
