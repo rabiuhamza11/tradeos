@@ -28,6 +28,7 @@ model User {
   updatedAt        DateTime     @updatedAt
 
   organizations    OrgMember[]
+  ownedOrganizations Organization[]
   portfolios       Portfolio[]
   trades           Trade[]
   orders           Order[]
