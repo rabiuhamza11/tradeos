@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "next dev --port 3000",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "test": "echo \"No tests for web app\" && exit 0",
+    "lint": "echo \"No linter for web app\" && exit 0"
   },
   "dependencies": {
     "next": "14.2.5",
