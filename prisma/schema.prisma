@@ -13,30 +13,35 @@ datasource db {
 // ============ AUTH & USERS ============
 
 model User {
-  id               String       @id @default(cuid())
-  email            String       @unique
-  password         String
-  firstName        String
-  lastName         String
-  twoFactorEnabled Boolean      @default(false)
-  twoFactorSecret  String?
-  avatar           String?
-  role             UserRole     @default(TRADER)
-  status           UserStatus   @default(ACTIVE)
-  lastLogin        DateTime?
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
+  id                  String       @id @default(cuid())
+  email               String       @unique
+  passwordHash        String
+  name                String?
+  twoFactorEnabled    Boolean      @default(false)
+  twoFactorSecret     String?
+  avatar              String?
+  emailVerified      Boolean      @default(false)
+  kycData             Json?
+  role                UserRole     @default(TRADER)
+  kycStatus           String       @default("UNVERIFIED")
+  status              UserStatus   @default(ACTIVE)
+  emailVerifyToken    String?
+  passwordResetToken  String?
+  passwordResetExpires DateTime?
+  lastLogin           DateTime?
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
 
-  organizations    OrgMember[]
-  ownedOrganizations Organization[] @relation("OrgOwner")
-  portfolios       Portfolio[]
-  trades           Trade[]
-  orders           Order[]
-  watchlists       Watchlist[]
-  agents           AIAgent[] @relation("AgentOwner")
-  notifications    Notification[]
-  apiKeys          ExchangeCredential[]
-  sessions         Session[]
+  organizations       OrgMember[]
+  portfolios          Portfolio[]
+  trades              Trade[]
+  orders              Order[]
+  watchlists          Watchlist[]
+  agents              AIAgent[]
+  notifications       Notification[]
+  apiKeys             ExchangeCredential[]
+  sessions            Session[]
+  refreshTokens       RefreshToken[]
 }
 
 model Organization {
@@ -49,7 +54,7 @@ model Organization {
   updatedAt   DateTime     @updatedAt
 
   ownerId     String
-  owner       User         @relation("OrgOwner", fields: [ownerId], references: [id])
+  owner       User         @relation(fields: [ownerId], references: [id])
 
   members     OrgMember[]
   portfolios  Portfolio[]
@@ -68,6 +73,18 @@ model OrgMember {
   user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([orgId, userId])
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  revoked   Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 enum UserRole {
@@ -301,7 +318,7 @@ model AIAgent {
   config      Json?
   performance Json?
   ownerId     String
-  owner       User         @relation("AgentOwner", fields: [ownerId], references: [id])
+  owner       User         @relation(fields: [ownerId], references: [id])
   orgId       String?
   org         Organization? @relation(fields: [orgId], references: [id])
   executions  AgentExecution[]

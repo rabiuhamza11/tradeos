@@ -1,8 +1,10 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { TrendingUp, BarChart3, Wallet, Bot, Settings, LogOut, Bell, Menu, Zap, Radio } from 'lucide-react';
+import { useStore } from '@/lib/store';
+import { authApi } from '@/lib/api';
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: TrendingUp },
@@ -16,7 +18,44 @@ const navItems = [
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  // Auth guard — restore session and redirect if not authenticated
+  const isAuthenticated = useStore((s) => s.isAuthenticated);
+  const user = useStore((s) => s.user);
+  const logout = useStore((s) => s.logout);
+  const restoreSession = useStore((s) => s.restoreSession);
+
+  useEffect(() => {
+    restoreSession();
+  }, []);
+
+  useEffect(() => {
+    // After restoring session, check if still not authenticated
+    if (!isAuthenticated && typeof window !== 'undefined') {
+      const token = localStorage.getItem('tradeos_token');
+      if (!token) router.push('/');
+    }
+  }, [isAuthenticated]);
+
+  // Proper logout — calls API to revoke refresh token, clears local state, redirects
+  const handleLogout = async () => {
+    await authApi.logout();
+    logout();
+    router.push('/');
+  };
+
+  // Get user display info from store or fallback to localStorage
+  const userName = user?.name || (typeof window !== 'undefined' ? (() => {
+    try { const u = JSON.parse(localStorage.getItem('tradeos_user') || '{}'); return u.name || 'Trader'; }
+    catch { return 'Trader'; }
+  })() : 'Trader');
+  const userEmail = user?.email || (typeof window !== 'undefined' ? (() => {
+    try { const u = JSON.parse(localStorage.getItem('tradeos_user') || '{}'); return u.email || 'user@tradeos.io'; }
+    catch { return 'user@tradeos.io'; }
+  })() : 'user@tradeos.io');
+  const userInitial = (userName || 'T').charAt(0).toUpperCase();
 
   return (
     <div className="min-h-screen bg-[#0A0E17] flex">
@@ -71,13 +110,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {/* User */}
           <div className="p-4 border-t border-[#2A2E39]">
             <div className="flex items-center gap-3 mb-3">
-              <div className="w-8 h-8 rounded-full bg-[#00D9A3] flex items-center justify-center text-sm font-bold text-black">R</div>
+              <div className="w-8 h-8 rounded-full bg-[#00D9A3] flex items-center justify-center text-sm font-bold text-black">{userInitial}</div>
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium truncate text-white">Rabiu Hamza</div>
-                <div className="text-xs text-white/30 truncate">demo@tradeos.io</div>
+                <div className="text-sm font-medium truncate text-white">{userName}</div>
+                <div className="text-xs text-white/30 truncate">{userEmail}</div>
               </div>
             </div>
-            <button className="w-full text-xs text-white/40 hover:text-red-400 flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/5 transition">
+            <button onClick={handleLogout} className="w-full text-xs text-white/40 hover:text-red-400 flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/5 transition">
               <LogOut size={14} /> Sign Out
             </button>
           </div>

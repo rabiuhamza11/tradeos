@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { authApi } from '@/lib/api';
 import { useStore } from "@/lib/store";
@@ -8,14 +8,30 @@ export default function LoginPage() {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [name, setName] = useState('');
   const [twoFactor, setTwoFactor] = useState(''); const [loading, setLoading] = useState(false); const [error, setError] = useState('');
-  const router = useRouter(); const setUser = useStore((s) => s.setUser); const setToken = useStore((s) => s.setToken);
+  const router = useRouter();
+  const setAuth = useStore((s) => s.setAuth);
+  const restoreSession = useStore((s) => s.restoreSession);
+  const isAuthenticated = useStore((s) => s.isAuthenticated);
+
+  // If already logged in, redirect to dashboard
+  useEffect(() => {
+    restoreSession();
+    if (isAuthenticated) router.push('/dashboard');
+  }, []);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setLoading(true); setError('');
     try {
-      const { data } = mode === 'login' ? await authApi.login(email, password) : await authApi.register({ email, password, firstName: name.split(' ')[0], lastName: name.split(' ')[1] || '' });
-      setUser(data.user); setToken(data.accessToken); router.push('/dashboard');
-    } catch (err: any) { setError(err.response?.data?.message || 'Auth failed'); } finally { setLoading(false); }
+      const { data } = mode === 'login'
+        ? await authApi.login(email, password, twoFactor || undefined)
+        : await authApi.register({ email, password, firstName: name.split(' ')[0], lastName: name.split(' ')[1] || '' });
+
+      // Store both tokens and user in the store
+      setAuth(data.user, data.accessToken, data.refreshToken);
+      router.push('/dashboard');
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Auth failed');
+    } finally { setLoading(false); }
   };
 
   return (

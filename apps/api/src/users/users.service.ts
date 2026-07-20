@@ -12,21 +12,21 @@ export class UsersService {
   async getProfile(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, email: true, name: true, avatarUrl: true, role: true, kycStatus: true, twoFactorEnabled: true, emailVerified: true, createdAt: true },
+      select: { id: true, email: true, name: true, avatar: true, role: true, kycStatus: true, twoFactorEnabled: true, emailVerified: true, createdAt: true },
     });
     if (!user) throw new NotFoundException('User not found');
     return user;
   }
 
-  async updateProfile(userId: string, dto: { name?: string; avatarUrl?: string }) {
+  async updateProfile(userId: string, dto: { name?: string; avatar?: string }) {
     return this.prisma.user.update({
       where: { id: userId }, data: dto,
-      select: { id: true, email: true, name: true, avatarUrl: true, role: true },
+      select: { id: true, email: true, name: true, avatar: true, role: true },
     });
   }
 
   async submitKyc(userId: string, kycData: any) {
-    return this.prisma.user.update({ where: { id: userId }, data: { kycData, kycStatus: 'PENDING' } });
+    return this.prisma.user.update({ where: { id: userId }, data: { kycData: kycData, kycStatus: 'PENDING' } });
   }
 
   // ============ EXCHANGE API KEYS ============

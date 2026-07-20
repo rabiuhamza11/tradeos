@@ -55,15 +55,25 @@ export class AuthService {
   async refresh(token: string) {
     const stored = await this.prisma.refreshToken.findUnique({ where: { token } });
     if (!stored || stored.revoked || stored.expiresAt < new Date()) throw new UnauthorizedException('Invalid refresh token');
+    // Revoke the old token and issue a new pair (rotation)
     await this.prisma.refreshToken.update({ where: { id: stored.id }, data: { revoked: true } });
     const user = await this.prisma.user.findUnique({ where: { id: stored.userId } });
     if (!user) throw new UnauthorizedException('User not found');
-    return { accessToken: this.signToken(user.id, user.email, user.role), refreshToken: await this.issueRefreshToken(user.id) };
+    return {
+      accessToken: this.signToken(user.id, user.email, user.role),
+      refreshToken: await this.issueRefreshToken(user.id),
+    };
   }
 
   async logout(token: string) {
     await this.prisma.refreshToken.updateMany({ where: { token, revoked: false }, data: { revoked: true } });
     return { message: 'Logged out' };
+  }
+
+  // Revoke all refresh tokens for a user (force logout everywhere)
+  async logoutAll(userId: string) {
+    await this.prisma.refreshToken.updateMany({ where: { userId, revoked: false }, data: { revoked: true } });
+    return { message: 'All sessions revoked' };
   }
 
   async enable2FA(userId: string) {
@@ -96,9 +106,10 @@ export class AuthService {
     return this.jwtService.sign({ sub: userId, email, role });
   }
 
+  // Refresh token: 90 days — long-lived so user stays logged in across browser restarts
   private async issueRefreshToken(userId: string): Promise<string> {
     const token = uuidv4();
-    await this.prisma.refreshToken.create({ data: { token, userId, expiresAt: new Date(Date.now() + 30 * 86400000) } });
+    await this.prisma.refreshToken.create({ data: { token, userId, expiresAt: new Date(Date.now() + 90 * 86400000) } });
     return token;
   }
 }

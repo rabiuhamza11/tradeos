@@ -12,6 +12,12 @@ export class AuthController {
   @Post('login') async login(@Body() dto: any) { return this.authService.login(dto); }
   @Post('refresh') async refresh(@Body('refreshToken') token: string) { return this.authService.refresh(token); }
   @Post('logout') async logout(@Body('refreshToken') token: string) { return this.authService.logout(token); }
+
+  @Post('logout-all')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  async logoutAll(@Req() req: any) { return this.authService.logoutAll(req.user.id); }
+
   @Post('password/reset-request') async requestReset(@Body('email') email: string) { return this.authService.requestPasswordReset(email); }
   @Post('password/reset') async resetPassword(@Body() dto: any) { return this.authService.resetPassword(dto.token, dto.password); }
 

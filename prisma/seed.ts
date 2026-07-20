@@ -15,10 +15,11 @@ async function main() {
     update: {},
     create: {
       email: 'demo@tradeos.io',
-      password: await bcrypt.hash('demo123456', 10),
-      firstName: 'Rabiu',
-      lastName: 'Hamza',
+      passwordHash: await bcrypt.hash('demo123456', 10),
+      name: 'Rabiu Hamza',
       twoFactorEnabled: true,
+      emailVerified: true,
+      kycStatus: 'VERIFIED',
     },
   });
   console.log(`✅ User: ${user.email}`);
@@ -30,7 +31,7 @@ async function main() {
     create: {
       name: 'HARZ Capital',
       ownerId: user.id,
-      plan: 'enterprise',
+      plan: 'ENTERPRISE',
     },
   });
   console.log(`✅ Organization: ${org.name}`);
@@ -156,16 +157,16 @@ async function main() {
 
   // Create AI agents
   const agents = [
-    { name: 'Scalper Agent', type: 'scalper', description: 'High-frequency micro-profit trading', strategy: 'scalping', riskLevel: 'MEDIUM', isActive: true },
-    { name: 'Swing Agent', type: 'swing', description: 'Multi-day trend capture', strategy: 'swing', riskLevel: 'MEDIUM', isActive: true },
-    { name: 'Arbitrage Agent', type: 'arbitrage', description: 'Cross-exchange price gap exploitation', strategy: 'arbitrage', riskLevel: 'LOW', isActive: true },
-    { name: 'Risk Manager', type: 'risk_manager', description: 'Position sizing and exposure limits', strategy: 'risk_management', riskLevel: 'LOW', isActive: true },
-    { name: 'Sentiment Agent', type: 'sentiment', description: 'News and social sentiment analysis', strategy: 'sentiment', riskLevel: 'HIGH', isActive: false },
-    { name: 'Portfolio Rebalancer', type: 'rebalancer', description: 'Auto-rebalance portfolio allocations', strategy: 'rebalancing', riskLevel: 'LOW', isActive: false },
+    { name: 'Scalper Agent', type: 'SCALPER', description: 'High-frequency micro-profit trading', strategy: 'scalping', riskLevel: 'MEDIUM', isActive: true },
+    { name: 'Swing Agent', type: 'SWING', description: 'Multi-day trend capture', strategy: 'swing', riskLevel: 'MEDIUM', isActive: true },
+    { name: 'Arbitrage Agent', type: 'ARBITRAGE', description: 'Cross-exchange price gap exploitation', strategy: 'arbitrage', riskLevel: 'LOW', isActive: true },
+    { name: 'Risk Manager', type: 'RISK_MANAGER', description: 'Position sizing and exposure limits', strategy: 'risk_management', riskLevel: 'LOW', isActive: true },
+    { name: 'Sentiment Agent', type: 'SENTIMENT', description: 'News and social sentiment analysis', strategy: 'sentiment', riskLevel: 'HIGH', isActive: false },
+    { name: 'Portfolio Rebalancer', type: 'REBALANCER', description: 'Auto-rebalance portfolio allocations', strategy: 'rebalancing', riskLevel: 'LOW', isActive: false },
   ];
 
   for (const agent of agents) {
-    await prisma.aiAgent.create({
+    await prisma.aIAgent.create({
       data: {
         ...agent,
         ownerId: user.id,
@@ -177,10 +178,10 @@ async function main() {
 
   // Create notifications
   const notifications = [
-    { type: 'trade', title: 'Order Filled', message: 'BUY 0.01 BTC @ $65,432 executed on Binance', priority: 'normal' },
-    { type: 'alert', title: 'Price Alert', message: 'ETH crossed $3,500 — watchlist triggered', priority: 'high' },
-    { type: 'risk', title: 'Risk Warning', message: 'Portfolio exposure at 78% — consider reducing', priority: 'high' },
-    { type: 'system', title: 'Agent Started', message: 'Scalper Agent started trading session', priority: 'normal' },
+    { type: 'TRADE', title: 'Order Filled', message: 'BUY 0.01 BTC @ $65,432 executed on Binance', priority: 'NORMAL' },
+    { type: 'ALERT', title: 'Price Alert', message: 'ETH crossed $3,500 — watchlist triggered', priority: 'HIGH' },
+    { type: 'RISK', title: 'Risk Warning', message: 'Portfolio exposure at 78% — consider reducing', priority: 'HIGH' },
+    { type: 'SYSTEM', title: 'Agent Started', message: 'Scalper Agent started trading session', priority: 'NORMAL' },
   ];
 
   for (const n of notifications) {

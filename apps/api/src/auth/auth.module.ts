@@ -11,7 +11,9 @@ import { JwtStrategy } from './jwt.strategy';
     JwtModule.registerAsync({
       useFactory: () => ({
         secret: process.env.JWT_SECRET || 'tradeos-secret-change-me',
-        signOptions: { expiresIn: '15m' },
+        // Access token: 7 days — user stays logged in across sessions
+        // The refresh token (90 days) provides extended persistence
+        signOptions: { expiresIn: '7d' },
       }),
     }),
   ],

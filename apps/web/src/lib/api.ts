@@ -12,21 +12,71 @@ const client: AxiosInstance = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
-// Auth interceptor
+// Auth interceptor — attach access token
 client.interceptors.request.use((config) => {
   const token = typeof window !== 'undefined' ? localStorage.getItem('tradeos_token') : null;
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
-// Response interceptor
+// Track refresh state to prevent concurrent refresh calls
+let isRefreshing = false;
+let refreshPromise: Promise<string | null> | null = null;
+
+// Refresh the access token using stored refresh token
+async function refreshAccessToken(): Promise<string | null> {
+  if (typeof window === 'undefined') return null;
+
+  if (isRefreshing && refreshPromise) return refreshPromise;
+
+  const refreshToken = localStorage.getItem('tradeos_refresh_token');
+  if (!refreshToken) return null;
+
+  isRefreshing = true;
+  refreshPromise = (async () => {
+    try {
+      const res = await axios.post(`${API_URL}/auth/refresh`, { refreshToken });
+      if (res.data?.accessToken) {
+        localStorage.setItem('tradeos_token', res.data.accessToken);
+        if (res.data?.refreshToken) {
+          localStorage.setItem('tradeos_refresh_token', res.data.refreshToken);
+        }
+        return res.data.accessToken;
+      }
+      return null;
+    } catch {
+      return null;
+    } finally {
+      isRefreshing = false;
+    }
+  })();
+
+  return refreshPromise;
+}
+
+// Response interceptor — auto-refresh on 401, only logout if refresh fails
 client.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response?.status === 401 && typeof window !== 'undefined') {
+  async (error) => {
+    const originalRequest = error.config;
+
+    // If 401 and we haven't already retried, attempt token refresh
+    if (error.response?.status === 401 && typeof window !== 'undefined' && !originalRequest._retry) {
+      originalRequest._retry = true;
+
+      const newToken = await refreshAccessToken();
+      if (newToken) {
+        originalRequest.headers.Authorization = `Bearer ${newToken}`;
+        return client(originalRequest); // Retry the original request
+      }
+
+      // Refresh failed — clear everything and redirect
       localStorage.removeItem('tradeos_token');
+      localStorage.removeItem('tradeos_refresh_token');
+      localStorage.removeItem('tradeos_user');
       window.location.href = '/';
     }
+
     return Promise.reject(error);
   }
 );
@@ -34,9 +84,45 @@ client.interceptors.response.use(
 // ============ AUTH API ============
 
 export const authApi = {
-  login: (email: string, password: string) => client.post('/auth/login', { email, password }),
-  register: (data: { email: string; password: string; firstName: string; lastName: string }) =>
-    client.post('/auth/register', data),
+  login: async (email: string, password: string, twoFactorCode?: string) => {
+    const res = await client.post('/auth/login', { email, password, twoFactorCode });
+    if (res.data?.accessToken) {
+      localStorage.setItem('tradeos_token', res.data.accessToken);
+    }
+    if (res.data?.refreshToken) {
+      localStorage.setItem('tradeos_refresh_token', res.data.refreshToken);
+    }
+    if (res.data?.user) {
+      localStorage.setItem('tradeos_user', JSON.stringify(res.data.user));
+    }
+    return res;
+  },
+  register: async (data: { email: string; password: string; firstName: string; lastName: string }) => {
+    const res = await client.post('/auth/register', data);
+    if (res.data?.accessToken) {
+      localStorage.setItem('tradeos_token', res.data.accessToken);
+    }
+    if (res.data?.refreshToken) {
+      localStorage.setItem('tradeos_refresh_token', res.data.refreshToken);
+    }
+    if (res.data?.user) {
+      localStorage.setItem('tradeos_user', JSON.stringify(res.data.user));
+    }
+    return res;
+  },
+  logout: async () => {
+    const refreshToken = typeof window !== 'undefined' ? localStorage.getItem('tradeos_refresh_token') : null;
+    try {
+      if (refreshToken) await client.post('/auth/logout', { refreshToken });
+    } catch {
+      // Ignore logout errors — clear locally anyway
+    }
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('tradeos_token');
+      localStorage.removeItem('tradeos_refresh_token');
+      localStorage.removeItem('tradeos_user');
+    }
+  },
   me: () => client.get('/auth/me'),
   refreshToken: () => client.post('/auth/refresh'),
   updatePassword: (oldPassword: string, newPassword: string) =>
@@ -233,8 +319,17 @@ export class StreamClient {
     this.listeners.get(event)!.push(callback);
   }
 
+  off(event: string, callback: Function) {
+    const callbacks = this.listeners.get(event);
+    if (callbacks) {
+      const idx = callbacks.indexOf(callback);
+      if (idx > -1) callbacks.splice(idx, 1);
+    }
+  }
+
   private emit(event: string, data: any) {
-    this.listeners.get(event)?.forEach((cb) => cb(data));
+    const callbacks = this.listeners.get(event);
+    if (callbacks) callbacks.forEach((cb) => cb(data));
   }
 
   disconnect() {
@@ -242,43 +337,3 @@ export class StreamClient {
     this.socket = null;
   }
 }
-
-export const streamClient = new StreamClient();
-
-// ============ EXPORTS ============
-
-export default {
-  auth: authApi,
-  markets: marketsApi,
-  trading: tradingApi,
-  portfolios: portfoliosApi,
-  analytics: analyticsApi,
-  agents: agentsApi,
-  watchlist: watchlistApi,
-  automation: automationApi,
-  notifications: notificationsApi,
-  settings: settingsApi,
-  stream: streamClient,
-};
-
-// Compat aliases — marketApi fetches live data from TradeOS AI backend
-const TRADEOS_AI = 'https://superagent-2286fb2f.base44.app/functions/tradeosAI';
-
-export const marketApi = {
-  movers: async () => {
-    const res = await fetch(TRADEOS_AI);
-    const json = await res.json();
-    const markets: any[] = json.markets || [];
-    const sorted = [...markets].sort((a, b) => b.change24h - a.change24h);
-    return {
-      data: {
-        gainers: sorted.filter(m => m.change24h > 0).slice(0, 5).map(m => ({
-          symbol: m.symbol, changePct: m.change24h / 100, price: m.price
-        })),
-        losers: sorted.filter(m => m.change24h < 0).slice(0, 5).map(m => ({
-          symbol: m.symbol, changePct: m.change24h / 100, price: m.price
-        })),
-      }
-    };
-  },
-};
