@@ -1,8 +1,13 @@
 // TradeOS API Client — Frontend to backend communication
-import axios, { AxiosInstance, AxiosResponse } from 'axios';
+import axios, { AxiosInstance } from 'axios';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:4001/stream';
+
+// ============ SESSION CONFIG ============
+const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+const HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+const REFRESH_BUFFER_MS = 60 * 1000; // Refresh 1 min before token expiry
 
 // ============ AXIOS INSTANCE ============
 
@@ -41,6 +46,8 @@ async function refreshAccessToken(): Promise<string | null> {
         if (res.data?.refreshToken) {
           localStorage.setItem('tradeos_refresh_token', res.data.refreshToken);
         }
+        // Schedule next proactive refresh
+        scheduleTokenRefresh(res.data.expiresIn || 900);
         return res.data.accessToken;
       }
       return null;
@@ -52,6 +59,85 @@ async function refreshAccessToken(): Promise<string | null> {
   })();
 
   return refreshPromise;
+}
+
+// Clear all auth data and redirect to login
+function forceLogout() {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem('tradeos_token');
+  localStorage.removeItem('tradeos_refresh_token');
+  localStorage.removeItem('tradeos_user');
+  localStorage.removeItem('tradeos_last_activity');
+  window.location.href = '/?reason=session_expired';
+}
+
+// ============ PROACTIVE TOKEN REFRESH ============
+let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleTokenRefresh(expiresInSeconds: number) {
+  if (typeof window === 'undefined') return;
+  if (refreshTimer) clearTimeout(refreshTimer);
+  // Refresh 1 minute before the token expires
+  const refreshInMs = Math.max((expiresInSeconds * 1000) - REFRESH_BUFFER_MS, 10000);
+  refreshTimer = setTimeout(async () => {
+    const newToken = await refreshAccessToken();
+    if (!newToken) forceLogout();
+  }, refreshInMs);
+}
+
+// ============ IDLE TIMEOUT TRACKING ============
+let idleTimer: ReturnType<typeof setTimeout> | null = null;
+let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+
+function resetIdleTimer() {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem('tradeos_last_activity', Date.now().toString());
+  if (idleTimer) clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => {
+    // User has been idle for 30 minutes — force logout
+    forceLogout();
+  }, IDLE_TIMEOUT_MS);
+}
+
+function startSessionTracking() {
+  if (typeof window === 'undefined') return;
+
+  // Track user activity
+  const activityEvents = ['mousedown', 'keydown', 'touchstart', 'scroll', 'click'];
+  let lastActivityUpdate = 0;
+
+  activityEvents.forEach((event) => {
+    window.addEventListener(event, () => {
+      // Throttle — only update once per 10 seconds
+      const now = Date.now();
+      if (now - lastActivityUpdate > 10000) {
+        lastActivityUpdate = now;
+        resetIdleTimer();
+      }
+    }, { passive: true });
+  });
+
+  // Start the idle timer
+  resetIdleTimer();
+
+  // Send heartbeat every 5 minutes to keep server-side session alive
+  heartbeatTimer = setInterval(async () => {
+    try {
+      await client.post('/auth/heartbeat');
+    } catch {
+      // Heartbeat failed — session might be expired
+      // The response interceptor will handle 401s
+    }
+  }, HEARTBEAT_INTERVAL_MS);
+}
+
+function stopSessionTracking() {
+  if (idleTimer) clearTimeout(idleTimer);
+  if (refreshTimer) clearTimeout(refreshTimer);
+  if (heartbeatTimer) clearInterval(heartbeatTimer);
+  idleTimer = null;
+  refreshTimer = null;
+  heartbeatTimer = null;
 }
 
 // Response interceptor — auto-refresh on 401, only logout if refresh fails
@@ -71,10 +157,7 @@ client.interceptors.response.use(
       }
 
       // Refresh failed — clear everything and redirect
-      localStorage.removeItem('tradeos_token');
-      localStorage.removeItem('tradeos_refresh_token');
-      localStorage.removeItem('tradeos_user');
-      window.location.href = '/';
+      forceLogout();
     }
 
     return Promise.reject(error);
@@ -95,8 +178,17 @@ export const authApi = {
     if (res.data?.user) {
       localStorage.setItem('tradeos_user', JSON.stringify(res.data.user));
     }
+    // Start session tracking
+    startSessionTracking();
+    // Schedule proactive token refresh
+    if (res.data?.expiresIn) {
+      scheduleTokenRefresh(res.data.expiresIn);
+    } else {
+      scheduleTokenRefresh(900); // Default 15 min
+    }
     return res;
   },
+
   register: async (data: { email: string; password: string; firstName: string; lastName: string }) => {
     const res = await client.post('/auth/register', data);
     if (res.data?.accessToken) {
@@ -108,8 +200,11 @@ export const authApi = {
     if (res.data?.user) {
       localStorage.setItem('tradeos_user', JSON.stringify(res.data.user));
     }
+    startSessionTracking();
+    scheduleTokenRefresh(900);
     return res;
   },
+
   logout: async () => {
     const refreshToken = typeof window !== 'undefined' ? localStorage.getItem('tradeos_refresh_token') : null;
     try {
@@ -117,12 +212,41 @@ export const authApi = {
     } catch {
       // Ignore logout errors — clear locally anyway
     }
+    // Stop all session tracking
+    stopSessionTracking();
     if (typeof window !== 'undefined') {
       localStorage.removeItem('tradeos_token');
       localStorage.removeItem('tradeos_refresh_token');
       localStorage.removeItem('tradeos_user');
+      localStorage.removeItem('tradeos_last_activity');
     }
   },
+
+  // Restore session on page reload — check if token is still valid
+  restoreSession: () => {
+    if (typeof window === 'undefined') return false;
+    const token = localStorage.getItem('tradeos_token');
+    const refreshToken = localStorage.getItem('tradeos_refresh_token');
+    const lastActivity = localStorage.getItem('tradeos_last_activity');
+
+    if (!token || !refreshToken) return false;
+
+    // Check idle timeout
+    if (lastActivity) {
+      const idleMs = Date.now() - parseInt(lastActivity, 10);
+      if (idleMs > IDLE_TIMEOUT_MS) {
+        // Session expired due to inactivity
+        forceLogout();
+        return false;
+      }
+    }
+
+    // Resume session tracking
+    startSessionTracking();
+    scheduleTokenRefresh(900); // Will refresh before expiry
+    return true;
+  },
+
   me: () => client.get('/auth/me'),
   refreshToken: () => client.post('/auth/refresh'),
   updatePassword: (oldPassword: string, newPassword: string) =>
@@ -241,99 +365,15 @@ export const automationApi = {
   createGrid: (params: any) => client.post('/automations/grid', params),
 };
 
-// ============ NOTIFICATIONS API ============
+// ============ AI CHAT API ============
 
-export const notificationsApi = {
-  list: (limit?: number) => client.get('/notifications', { params: { limit } }),
-  getUnreadCount: () => client.get('/notifications/unread-count'),
-  markAsRead: (id: string) => client.put(`/notifications/${id}/read`),
-  markAllAsRead: () => client.put('/notifications/read-all'),
-  delete: (id: string) => client.delete(`/notifications/${id}`),
-  registerWebhook: (url: string) => client.post('/notifications/webhook', { url }),
+export const aiChatApi = {
+  sendMessage: (message: string, context?: any) =>
+    client.post('/ai/chat', { message, context }),
+  getHistory: (limit?: number) => client.get('/ai/chat/history', { params: { limit } }),
+  clearHistory: () => client.delete('/ai/chat/history'),
 };
 
-// ============ SETTINGS API ============
-
-export const settingsApi = {
-  getApiKeys: () => client.get('/settings/api-keys'),
-  addApiKey: (data: { exchange: string; apiKey: string; apiSecret: string; passphrase?: string; accountId?: string }) =>
-    client.post('/settings/api-keys', data),
-  removeApiKey: (id: string) => client.delete(`/settings/api-keys/${id}`),
-  testApiKey: (id: string) => client.post(`/settings/api-keys/${id}/test`),
-  getSecurityAudit: () => client.get('/settings/security/audit'),
-  runSecurityAudit: () => client.post('/settings/security/audit'),
-  getSessions: () => client.get('/settings/sessions'),
-  destroySession: (sessionId: string) => client.delete(`/settings/sessions/${sessionId}`),
-  getIpWhitelist: () => client.get('/settings/security/ip-whitelist'),
-  addToWhitelist: (ip: string) => client.post('/settings/security/ip-whitelist', { ip }),
-  removeFromWhitelist: (ip: string) => client.delete(`/settings/security/ip-whitelist`, { data: { ip } }),
-  updateProfile: (data: any) => client.put('/settings/profile', data),
-  setTradingEnvironment: (testnet: boolean) => client.put('/settings/trading-env', { testnet }),
-};
-
-// ============ WEBSOCKET CLIENT ============
-
-export class StreamClient {
-  private socket: WebSocket | null = null;
-  private listeners: Map<string, Function[]> = new Map();
-
-  connect() {
-    this.socket = new WebSocket(WS_URL);
-
-    this.socket.onopen = () => {
-      console.log('✅ StreamClient connected');
-      this.emit('connected', null);
-    };
-
-    this.socket.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        this.emit(data.event || 'message', data);
-      } catch (e) {
-        console.error('StreamClient parse error:', e);
-      }
-    };
-
-    this.socket.onclose = () => {
-      console.log('⚠️ StreamClient disconnected');
-      this.emit('disconnected', null);
-      // Auto-reconnect after 3s
-      setTimeout(() => this.connect(), 3000);
-    };
-
-    this.socket.onerror = (err) => {
-      console.error('StreamClient error:', err);
-    };
-  }
-
-  subscribe(channel: string, symbols?: string[]) {
-    this.socket?.send(JSON.stringify({ event: 'subscribe', data: { channel, symbols } }));
-  }
-
-  unsubscribe(channel: string, symbols?: string[]) {
-    this.socket?.send(JSON.stringify({ event: 'unsubscribe', data: { channel, symbols } }));
-  }
-
-  on(event: string, callback: Function) {
-    if (!this.listeners.has(event)) this.listeners.set(event, []);
-    this.listeners.get(event)!.push(callback);
-  }
-
-  off(event: string, callback: Function) {
-    const callbacks = this.listeners.get(event);
-    if (callbacks) {
-      const idx = callbacks.indexOf(callback);
-      if (idx > -1) callbacks.splice(idx, 1);
-    }
-  }
-
-  private emit(event: string, data: any) {
-    const callbacks = this.listeners.get(event);
-    if (callbacks) callbacks.forEach((cb) => cb(data));
-  }
-
-  disconnect() {
-    this.socket?.close();
-    this.socket = null;
-  }
-}
+// Export session utilities
+export { startSessionTracking, stopSessionTracking, forceLogout };
+export default client;

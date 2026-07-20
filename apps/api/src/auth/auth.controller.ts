@@ -8,26 +8,63 @@ import { JwtAuthGuard } from './jwt-auth.guard';
 export class AuthController {
   constructor(private authService: AuthService) {}
 
-  @Post('register') async register(@Body() dto: any) { return this.authService.register(dto); }
-  @Post('login') async login(@Body() dto: any) { return this.authService.login(dto); }
-  @Post('refresh') async refresh(@Body('refreshToken') token: string) { return this.authService.refresh(token); }
-  @Post('logout') async logout(@Body('refreshToken') token: string) { return this.authService.logout(token); }
+  @Post('register')
+  async register(@Body() dto: any) {
+    return this.authService.register(dto);
+  }
+
+  @Post('login')
+  async login(@Body() dto: any) {
+    return this.authService.login(dto);
+  }
+
+  @Post('refresh')
+  async refresh(@Body('refreshToken') token: string) {
+    return this.authService.refresh(token);
+  }
+
+  @Post('logout')
+  async logout(@Body('refreshToken') token: string) {
+    return this.authService.logout(token);
+  }
 
   @Post('logout-all')
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
-  async logoutAll(@Req() req: any) { return this.authService.logoutAll(req.user.id); }
+  async logoutAll(@Req() req: any) {
+    return this.authService.logoutAll(req.user.id);
+  }
 
-  @Post('password/reset-request') async requestReset(@Body('email') email: string) { return this.authService.requestPasswordReset(email); }
-  @Post('password/reset') async resetPassword(@Body() dto: any) { return this.authService.resetPassword(dto.token, dto.password); }
+  // Heartbeat — frontend pings this every 5 min to keep session alive
+  // If user goes idle for 30 min, the next refresh will fail and force re-login
+  @Post('heartbeat')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  async heartbeat(@Req() req: any) {
+    return this.authService.heartbeat(req.user.id);
+  }
+
+  @Post('password/reset-request')
+  async requestReset(@Body('email') email: string) {
+    return this.authService.requestPasswordReset(email);
+  }
+
+  @Post('password/reset')
+  async resetPassword(@Body() dto: any) {
+    return this.authService.resetPassword(dto.token, dto.password);
+  }
 
   @Post('2fa/enable')
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
-  async enable2FA(@Req() req: any) { return this.authService.enable2FA(req.user.id); }
+  async enable2FA(@Req() req: any) {
+    return this.authService.enable2FA(req.user.id);
+  }
 
   @Post('2fa/disable')
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
-  async disable2FA(@Req() req: any) { return this.authService.disable2FA(req.user.id); }
+  async disable2FA(@Req() req: any) {
+    return this.authService.disable2FA(req.user.id);
+  }
 }

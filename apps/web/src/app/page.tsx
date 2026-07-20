@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { authApi } from '@/lib/api';
 import { useStore } from "@/lib/store";
 
@@ -8,13 +8,20 @@ export default function LoginPage() {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [name, setName] = useState('');
   const [twoFactor, setTwoFactor] = useState(''); const [loading, setLoading] = useState(false); const [error, setError] = useState('');
+  const [sessionMessage, setSessionMessage] = useState('');
   const router = useRouter();
+  const searchParams = useSearchParams();
   const setAuth = useStore((s) => s.setAuth);
   const restoreSession = useStore((s) => s.restoreSession);
   const isAuthenticated = useStore((s) => s.isAuthenticated);
 
-  // If already logged in, redirect to dashboard
+  // Check if redirected due to session expiry
   useEffect(() => {
+    const reason = searchParams.get('reason');
+    if (reason === 'session_expired') {
+      setSessionMessage('Your session expired due to inactivity. Please log in again.');
+    }
+
     restoreSession();
     if (isAuthenticated) router.push('/dashboard');
   }, []);
@@ -26,11 +33,10 @@ export default function LoginPage() {
         ? await authApi.login(email, password, twoFactor || undefined)
         : await authApi.register({ email, password, firstName: name.split(' ')[0], lastName: name.split(' ')[1] || '' });
 
-      // Store both tokens and user in the store
       setAuth(data.user, data.accessToken, data.refreshToken);
       router.push('/dashboard');
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Auth failed');
+      setError(err.response?.data?.message || 'Authentication failed');
     } finally { setLoading(false); }
   };
 
@@ -41,6 +47,13 @@ export default function LoginPage() {
           <h1 className="text-4xl font-bold text-tradeos-accent">TradeOS</h1>
           <p className="text-white/40 mt-2">AI-Powered Trading Platform</p>
         </div>
+
+        {sessionMessage && (
+          <div className="mb-4 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 text-sm text-center">
+            {sessionMessage}
+          </div>
+        )}
+
         <div className="card">
           <div className="flex gap-2 mb-6">
             <button onClick={() => setMode('login')} className={`flex-1 py-2 rounded-lg font-medium ${mode === 'login' ? 'bg-tradeos-accent text-black' : 'text-white/40'}`}>Login</button>

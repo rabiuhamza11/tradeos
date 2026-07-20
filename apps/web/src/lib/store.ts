@@ -1,6 +1,9 @@
 // TradeOS Zustand Store — Global state management
 import { create } from 'zustand';
 
+// Idle timeout must match the backend (30 minutes)
+const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
+
 interface AppState {
   // Auth
   user: any | null;
@@ -83,6 +86,7 @@ export const useStore = create<AppState>((set) => ({
       localStorage.setItem('tradeos_token', accessToken);
       localStorage.setItem('tradeos_refresh_token', refreshToken);
       localStorage.setItem('tradeos_user', JSON.stringify(user));
+      localStorage.setItem('tradeos_last_activity', Date.now().toString());
     }
     set({ user, token: accessToken, refreshToken, isAuthenticated: true });
   },
@@ -92,24 +96,45 @@ export const useStore = create<AppState>((set) => ({
       localStorage.removeItem('tradeos_token');
       localStorage.removeItem('tradeos_refresh_token');
       localStorage.removeItem('tradeos_user');
+      localStorage.removeItem('tradeos_last_activity');
     }
     set({ user: null, token: null, refreshToken: null, isAuthenticated: false });
   },
 
-  // Restore session from localStorage on page load — keeps user logged in across refreshes
+  // Restore session from localStorage on page load
+  // Checks idle timeout — if user has been away for >30 min, force re-login
   restoreSession: () => {
     if (typeof window === 'undefined') return;
+
     const token = localStorage.getItem('tradeos_token');
     const refreshToken = localStorage.getItem('tradeos_refresh_token');
     const userStr = localStorage.getItem('tradeos_user');
-    if (token && userStr) {
-      try {
-        const user = JSON.parse(userStr);
-        set({ user, token, refreshToken, isAuthenticated: true });
-      } catch {
-        // Corrupted user data — clear it
+    const lastActivity = localStorage.getItem('tradeos_last_activity');
+
+    if (!token || !userStr) return;
+
+    // Check idle timeout — if user was inactive for >30 min, clear session
+    if (lastActivity) {
+      const idleMs = Date.now() - parseInt(lastActivity, 10);
+      if (idleMs > IDLE_TIMEOUT_MS) {
+        // Session expired — clear everything
+        localStorage.removeItem('tradeos_token');
+        localStorage.removeItem('tradeos_refresh_token');
         localStorage.removeItem('tradeos_user');
+        localStorage.removeItem('tradeos_last_activity');
+        // Redirect to login with session_expired reason
+        window.location.href = '/?reason=session_expired';
+        return;
       }
+    }
+
+    try {
+      const user = JSON.parse(userStr);
+      set({ user, token, refreshToken, isAuthenticated: true });
+      // Update activity timestamp on restore
+      localStorage.setItem('tradeos_last_activity', Date.now().toString());
+    } catch {
+      localStorage.removeItem('tradeos_user');
     }
   },
 
